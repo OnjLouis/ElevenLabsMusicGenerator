@@ -26,6 +26,11 @@ namespace ElevenLabsMusicGenerator
             if (Variations <= 1) return new[] { Path.Combine(OutputFolder, stem + extension) };
             return Enumerable.Range(1, Variations).Select(index => Path.Combine(OutputFolder, stem + "_v" + index + extension)).ToList();
         }
+
+        public string PromptPath()
+        {
+            return Path.Combine(OutputFolder, FileNameHelper.SafeStem(BaseName, Prompt) + ".txt");
+        }
     }
 
     internal static class FileNameHelper

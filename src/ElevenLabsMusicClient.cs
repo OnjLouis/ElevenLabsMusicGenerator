@@ -71,7 +71,7 @@ namespace ElevenLabsMusicGenerator
 
             var audioPartPath = outputPath + ".part";
             var pcmPartPath = outputPath + ".pcm.part";
-            var promptPath = Path.ChangeExtension(outputPath, ".txt");
+            var promptPath = requestData.PromptPath();
             var promptPartPath = promptPath + ".part";
             DeleteIfExists(audioPartPath);
             DeleteIfExists(pcmPartPath);
@@ -117,12 +117,13 @@ namespace ElevenLabsMusicGenerator
                             DeleteIfExists(pcmPartPath);
                         }
 
-                        File.WriteAllText(promptPartPath, requestData.Prompt.TrimEnd() + Environment.NewLine, new UTF8Encoding(false));
+                        if (variationIndex == 1)
+                            File.WriteAllText(promptPartPath, requestData.Prompt.TrimEnd() + Environment.NewLine, new UTF8Encoding(false));
                         ReplaceFile(audioPartPath, outputPath);
-                        ReplaceFile(promptPartPath, promptPath);
+                        if (variationIndex == 1) ReplaceFile(promptPartPath, promptPath);
                         var songId = response.Headers["song-id"] ?? string.Empty;
                         AppLog.Write("Generated " + Path.GetFileName(outputPath) + "; variation=" + variationIndex + "; bytes=" + received + "; format=" + requestData.OutputFormat + "; model=" + requestData.ModelId + ".");
-                        Report(progress, requestData, variationIndex, outputPath, received, "Saved generated audio and prompt.");
+                        Report(progress, requestData, variationIndex, outputPath, received, variationIndex == 1 ? "Saved generated audio and shared prompt." : "Saved generated audio.");
                         return new GenerationResult { OutputPath = outputPath, PromptPath = promptPath, AudioBytes = received, SongId = songId };
                     }
                 }

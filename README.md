@@ -8,7 +8,7 @@ An accessible, portable Windows application for generating music through the Ele
 - Direct HTTPS communication with the ElevenLabs REST API.
 - No Python, bundled runtime, registry settings, installation, or startup extraction.
 - Portable settings beside the executable and private changing data under `User`.
-- Atomic audio output, cancellation cleanup, draft recovery, and matching prompt sidecars.
+- Atomic audio output, cancellation cleanup, draft recovery, and one shared prompt file per generation batch.
 
 ## Building
 

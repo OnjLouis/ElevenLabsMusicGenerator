@@ -212,7 +212,8 @@ namespace ElevenLabsMusicGenerator
                 Environment.NewLine + Environment.NewLine + "Total generated duration: " + (request.Variations * request.LengthSeconds) + " seconds." +
                 Environment.NewLine + "Model: " + request.ModelId + Environment.NewLine + "Format: " + request.OutputFormat +
                 Environment.NewLine + "Folder: " + request.OutputFolder + Environment.NewLine + Environment.NewLine + "This will spend ElevenLabs credits.";
-            if (existing.Count > 0) summary += Environment.NewLine + Environment.NewLine + existing.Count + " existing audio file" + (existing.Count == 1 ? " will" : "s will") + " be replaced together with matching prompt files.";
+            if (existing.Count > 0) summary += Environment.NewLine + Environment.NewLine + existing.Count + " existing audio file" + (existing.Count == 1 ? " will" : "s will") + " be replaced.";
+            if (File.Exists(request.PromptPath())) summary += Environment.NewLine + "The existing shared prompt file will be replaced.";
             if (MessageBox.Show(this, summary, "Confirm music generation", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
 
             SaveDraftNonFatal();

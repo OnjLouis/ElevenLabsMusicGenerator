@@ -30,6 +30,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 Run("Legacy API key migration", TestLegacyApiKeyMigration);
                 Run("Output naming", TestOutputNaming);
                 Run("Mock PCM generation", TestMockPcmGeneration);
+                Run("Shared prompt for variations", TestSharedPromptForVariations);
                 Run("Accessible control structure", TestAccessibleControlStructure);
                 Run("Updater arguments", TestUpdaterArguments);
                 Run("Invalid update signature rejection", TestInvalidUpdateSignature);
@@ -160,6 +161,37 @@ namespace ElevenLabsMusicGenerator.Tests
                 Assert(server.RequestText.Contains("\"force_instrumental\":true"), "Instrumental setting was not sent.");
                 Assert(server.RequestText.Contains("\"model_id\":\"music_v2_5\""), "Model was not sent.");
             }
+        }
+
+        private static void TestSharedPromptForVariations()
+        {
+            var outputFolder = Path.Combine(AppPaths.AppFolder, "Mock Output");
+            Directory.CreateDirectory(outputFolder);
+            var request = new MusicGenerationRequest
+            {
+                Prompt = "One prompt for both variations.",
+                LengthSeconds = 3,
+                Variations = 2,
+                Instrumental = false,
+                OutputFormat = "pcm_44100",
+                ModelId = "music_v2_5",
+                OutputFolder = outputFolder,
+                BaseName = "Shared"
+            };
+            var paths = request.OutputPaths();
+            for (var index = 0; index < paths.Count; index++)
+            {
+                using (var server = new MockHttpServer(new byte[] { 0, 0, 1, 0 }))
+                {
+                    new ElevenLabsMusicClient("test-key", server.ApiRoot).GenerateOne(request, paths[index], index + 1, CancellationToken.None, null);
+                    server.Wait();
+                }
+            }
+
+            Assert(File.Exists(paths[0]) && File.Exists(paths[1]), "Both audio variations must be saved.");
+            Assert(File.ReadAllText(Path.Combine(outputFolder, "Shared.txt"), Encoding.UTF8) == request.Prompt + Environment.NewLine, "Shared prompt file is missing or wrong.");
+            Assert(!File.Exists(Path.Combine(outputFolder, "Shared_v1.txt")), "The first variation has a redundant prompt file.");
+            Assert(!File.Exists(Path.Combine(outputFolder, "Shared_v2.txt")), "The second variation has a redundant prompt file.");
         }
 
         private static void TestAccessibleControlStructure()
