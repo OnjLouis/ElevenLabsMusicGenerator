@@ -64,6 +64,7 @@ namespace ElevenLabsMusicGenerator
         {
             if (requestData == null) throw new ArgumentNullException("requestData");
             if (string.IsNullOrWhiteSpace(outputPath)) throw new ArgumentException("An output path is required.", "outputPath");
+            if (File.Exists(outputPath)) throw new InvalidOperationException("The existing track will not be overwritten: " + Path.GetFileName(outputPath));
 
             var outputFolder = Path.GetDirectoryName(outputPath);
             if (string.IsNullOrWhiteSpace(outputFolder)) throw new InvalidOperationException("The output folder could not be determined.");
@@ -119,7 +120,7 @@ namespace ElevenLabsMusicGenerator
 
                         if (variationIndex == 1)
                             File.WriteAllText(promptPartPath, requestData.Prompt.TrimEnd() + Environment.NewLine, new UTF8Encoding(false));
-                        ReplaceFile(audioPartPath, outputPath);
+                        File.Move(audioPartPath, outputPath);
                         if (variationIndex == 1) ReplaceFile(promptPartPath, promptPath);
                         var songId = response.Headers["song-id"] ?? string.Empty;
                         AppLog.Write("Generated " + Path.GetFileName(outputPath) + "; variation=" + variationIndex + "; bytes=" + received + "; format=" + requestData.OutputFormat + "; model=" + requestData.ModelId + ".");

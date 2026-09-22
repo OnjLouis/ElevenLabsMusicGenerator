@@ -27,11 +27,16 @@ namespace ElevenLabsMusicGenerator.Tests
             {
                 if (args.Length == 2 && args[0] == "--live-auth-env") return RunLiveAuthentication(args[1]);
                 Run("Settings round trip", TestSettingsRoundTrip);
+                Run("Portable music folder default", TestPortableMusicFolderDefault);
                 Run("Legacy API key migration", TestLegacyApiKeyMigration);
                 Run("Output naming", TestOutputNaming);
                 Run("Mock PCM generation", TestMockPcmGeneration);
+                Run("Existing audio is never overwritten", TestExistingAudioIsNeverOverwritten);
                 Run("Shared prompt for variations", TestSharedPromptForVariations);
+                Run("Resume only unfinished variations", TestResumeOnlyUnfinishedVariations);
                 Run("Numeric fields select current value", TestNumericFieldsSelectCurrentValue);
+                Run("Main window mnemonics", TestMainWindowMnemonics);
+                Run("Preferences own the output folder", TestPreferencesOwnOutputFolder);
                 Run("API error preserves status and message", TestApiErrorPreservesStatus);
                 Run("Accessible control structure", TestAccessibleControlStructure);
                 Run("Updater arguments", TestUpdaterArguments);
@@ -97,6 +102,17 @@ namespace ElevenLabsMusicGenerator.Tests
             Assert(loaded.InstallUpdatesSilently, "Silent update setting did not round trip.");
         }
 
+        private static void TestPortableMusicFolderDefault()
+        {
+            var expected = Path.Combine(AppPaths.AppFolder, "Music");
+            Assert(new AppSettings().DefaultOutputFolder == expected, "A fresh portable install does not default to its own Music folder.");
+            AppPaths.EnsureUserFolders();
+            Assert(Directory.Exists(expected), "The portable Music folder was not created.");
+            new AppSettings().Save();
+            Assert(File.ReadAllText(AppPaths.SettingsPath).Contains(@"DefaultOutputFolder=.\Music"), "Portable output path was saved as an absolute path.");
+            Assert(AppSettings.Load().DefaultOutputFolder == expected, "Portable output path did not resolve after loading.");
+        }
+
         private static void TestLegacyApiKeyMigration()
         {
             if (File.Exists(AppPaths.ApiKeyPath)) File.Delete(AppPaths.ApiKeyPath);
@@ -130,7 +146,6 @@ namespace ElevenLabsMusicGenerator.Tests
             var outputFolder = Path.Combine(AppPaths.AppFolder, "Mock Output");
             Directory.CreateDirectory(outputFolder);
             var outputPath = Path.Combine(outputFolder, "Mock.wav");
-            File.WriteAllText(outputPath, "old audio");
             File.WriteAllText(Path.ChangeExtension(outputPath, ".txt"), "old prompt");
 
             using (var server = new MockHttpServer(new byte[] { 0, 0, 1, 0, 2, 0, 3, 0 }))
@@ -165,6 +180,20 @@ namespace ElevenLabsMusicGenerator.Tests
             }
         }
 
+        private static void TestExistingAudioIsNeverOverwritten()
+        {
+            var folder = Path.Combine(AppPaths.AppFolder, "Mock Output");
+            Directory.CreateDirectory(folder);
+            var path = Path.Combine(folder, "Existing.wav");
+            File.WriteAllText(path, "keep this file");
+            var request = new MusicGenerationRequest { Prompt = "test", OutputFolder = folder, BaseName = "Existing", OutputFormat = "pcm_44100" };
+            var rejected = false;
+            try { new ElevenLabsMusicClient("test-key", "http://127.0.0.1:1").GenerateOne(request, path, 1, CancellationToken.None, null); }
+            catch (InvalidOperationException) { rejected = true; }
+            Assert(rejected, "Generation did not refuse an existing audio file before the API request.");
+            Assert(File.ReadAllText(path) == "keep this file", "Generation changed an existing audio file.");
+        }
+
         private static void TestSharedPromptForVariations()
         {
             var outputFolder = Path.Combine(AppPaths.AppFolder, "Mock Output");
@@ -194,6 +223,63 @@ namespace ElevenLabsMusicGenerator.Tests
             Assert(File.ReadAllText(Path.Combine(outputFolder, "Shared.txt"), Encoding.UTF8) == request.Prompt + Environment.NewLine, "Shared prompt file is missing or wrong.");
             Assert(!File.Exists(Path.Combine(outputFolder, "Shared_v1.txt")), "The first variation has a redundant prompt file.");
             Assert(!File.Exists(Path.Combine(outputFolder, "Shared_v2.txt")), "The second variation has a redundant prompt file.");
+        }
+
+        private static void TestResumeOnlyUnfinishedVariations()
+        {
+            var folder = Path.Combine(AppPaths.AppFolder, "Resume Output");
+            Directory.CreateDirectory(folder);
+            var request = new MusicGenerationRequest
+            {
+                Prompt = "The same prompt for all three versions.",
+                LengthSeconds = 3,
+                Variations = 3,
+                OutputFormat = "pcm_44100",
+                ModelId = "music_v2_5",
+                OutputFolder = folder,
+                BaseName = "Resume"
+            };
+            var paths = request.OutputPaths();
+            var raw = Path.Combine(folder, "sample.pcm");
+            File.WriteAllBytes(raw, new byte[3 * 44100 * 4]);
+            WaveFileWriter.WrapPcmFile(raw, paths[0], 44100);
+            WaveFileWriter.WrapPcmFile(raw, paths[1], 44100);
+            File.WriteAllText(request.PromptPath(), request.Prompt + Environment.NewLine, new UTF8Encoding(false));
+
+            var plan = GenerationBatchPlan.Create(request);
+            Assert(plan.ExistingCount == 2, "Completed variation count is wrong.");
+            Assert(plan.PendingVariationIndices.SequenceEqual(new[] { 3 }), "Resume would repeat paid requests.");
+            var originalHashes = paths.Take(2).Select(path => Hash(path)).ToArray();
+            using (var server = new MockHttpServer(new byte[3 * 44100 * 4]))
+            {
+                new ElevenLabsMusicClient("test-key", server.ApiRoot).GenerateOne(request, paths[2], 3, CancellationToken.None, null);
+                server.Wait();
+            }
+            Assert(File.Exists(paths[2]), "Missing variation was not saved.");
+            Assert(paths.Take(2).Select(path => Hash(path)).SequenceEqual(originalHashes), "Resume changed completed audio.");
+            Assert(GenerationBatchPlan.Create(request).PendingVariationIndices.Count == 0, "Complete batch was not recognized.");
+
+            request.LengthSeconds = 4;
+            AssertResumeRejected(request, "Different length was accepted for resume.");
+            request.LengthSeconds = 3;
+            File.WriteAllText(request.PromptPath(), "A different prompt.");
+            AssertResumeRejected(request, "Different prompt was accepted for resume.");
+            File.Delete(request.PromptPath());
+            AssertResumeRejected(request, "Missing prompt was accepted for resume.");
+        }
+
+        private static void AssertResumeRejected(MusicGenerationRequest request, string message)
+        {
+            var rejected = false;
+            try { GenerationBatchPlan.Create(request); }
+            catch (InvalidDataException) { rejected = true; }
+            Assert(rejected, message);
+        }
+
+        private static string Hash(string path)
+        {
+            using (var hash = SHA256.Create())
+            using (var stream = File.OpenRead(path)) return Convert.ToBase64String(hash.ComputeHash(stream));
         }
 
         private static void TestApiErrorPreservesStatus()
@@ -265,6 +351,71 @@ namespace ElevenLabsMusicGenerator.Tests
                     Assert(numeric.Text == replacement && numeric.Value == decimal.Parse(replacement), name + " did not retain the replacement value.");
                 }
             }
+        }
+
+        private static void TestMainWindowMnemonics()
+        {
+            using (var form = new MainForm(null))
+            {
+                var labels = Descendants(form).Where(control => control is Label || control is Button || control is CheckBox)
+                    .Select(control => new { Text = control.Text, Mnemonic = Mnemonic(control.Text) });
+                var menus = form.MainMenuStrip.Items.OfType<ToolStripMenuItem>()
+                    .Select(item => new { Text = item.Text, Mnemonic = Mnemonic(item.Text) });
+                var duplicates = labels.Concat(menus).Where(item => item.Mnemonic.HasValue)
+                    .GroupBy(item => item.Mnemonic.Value).Where(group => group.Count() > 1)
+                    .Select(group => group.Key + ": " + string.Join(", ", group.Select(item => item.Text).ToArray())).ToArray();
+                Assert(duplicates.Length == 0, "Main window mnemonic clashes: " + string.Join("; ", duplicates));
+
+                var file = form.MainMenuStrip.Items.OfType<ToolStripMenuItem>().First(item => item.Text == "&File");
+                var openOutput = file.DropDownItems.OfType<ToolStripMenuItem>().First(item => item.Text.Contains("Output"));
+                Assert(openOutput.ShortcutKeys == (Keys.Control | Keys.Shift | Keys.O), "Open output folder shortcut changed.");
+                var expected = new Dictionary<string, string>
+                {
+                    { "&New Prompt", "Ctrl+N" }, { "&Open Prompt...", "Ctrl+O" },
+                    { "&Save Prompt", "Ctrl+S" }, { "Save Prompt &As...", "Ctrl+Shift+S" },
+                    { "Open Output &Folder", "Ctrl+Shift+O" }, { "&Generate Music", "Ctrl+Enter" },
+                    { "&Cancel Generation", "Esc" }, { "&Preferences...", "Ctrl+," },
+                    { "&Check for Updates...", "Shift+F1" }, { "ElevenLabs Music Generator &Help", "F1" }
+                };
+                foreach (var item in form.MainMenuStrip.Items.OfType<ToolStripMenuItem>().SelectMany(menu => menu.DropDownItems.OfType<ToolStripMenuItem>()))
+                {
+                    string shortcut;
+                    if (!expected.TryGetValue(item.Text, out shortcut)) continue;
+                    Assert(item.ShortcutKeyDisplayString == shortcut, item.Text + " does not show " + shortcut + " in the menu.");
+                }
+            }
+        }
+
+        private static void TestPreferencesOwnOutputFolder()
+        {
+            var folder = Path.Combine(AppPaths.AppFolder, "Remembered Output");
+            var defaults = new AppSettings { DefaultOutputFolder = folder };
+            defaults.Save();
+            using (var form = new MainForm(null))
+            {
+                form.StartPosition = FormStartPosition.Manual;
+                form.Location = new System.Drawing.Point(-2000, -2000);
+                form.Show();
+                Assert(!Descendants(form).OfType<TextBox>().Any(control => control.AccessibleName == "Output folder"), "The main window still has an output folder editor.");
+                Descendants(form).OfType<NumericUpDown>().First(control => control.AccessibleName == "Length in seconds").Value = 120;
+                Descendants(form).OfType<NumericUpDown>().First(control => control.AccessibleName == "Number of variations").Value = 3;
+                form.Close();
+            }
+            var saved = AppSettings.Load();
+            Assert(saved.DefaultOutputFolder == folder, "The main window replaced the Preferences output folder.");
+            Assert(saved.DefaultLengthSeconds == 120, "Main window length was not remembered.");
+            Assert(saved.DefaultVariations == 3, "Main window variations were not remembered.");
+        }
+
+        private static char? Mnemonic(string text)
+        {
+            for (var index = 0; index + 1 < text.Length; index++)
+            {
+                if (text[index] != '&') continue;
+                if (text[index + 1] == '&') { index++; continue; }
+                return char.ToUpperInvariant(text[index + 1]);
+            }
+            return null;
         }
 
         private static void TestAccessibleControlStructure()
@@ -372,6 +523,8 @@ namespace ElevenLabsMusicGenerator.Tests
             try { if (Directory.Exists(AppPaths.UserFolder)) Directory.Delete(AppPaths.UserFolder, true); } catch { }
             try { if (Directory.Exists(Path.Combine(AppPaths.AppFolder, "Output"))) Directory.Delete(Path.Combine(AppPaths.AppFolder, "Output"), true); } catch { }
             try { if (Directory.Exists(Path.Combine(AppPaths.AppFolder, "Mock Output"))) Directory.Delete(Path.Combine(AppPaths.AppFolder, "Mock Output"), true); } catch { }
+            try { if (Directory.Exists(Path.Combine(AppPaths.AppFolder, "Resume Output"))) Directory.Delete(Path.Combine(AppPaths.AppFolder, "Resume Output"), true); } catch { }
+            try { if (Directory.Exists(Path.Combine(AppPaths.AppFolder, "Music"))) Directory.Delete(Path.Combine(AppPaths.AppFolder, "Music"), true); } catch { }
             try { if (Directory.Exists(Path.Combine(AppPaths.AppFolder, "Signature Test"))) Directory.Delete(Path.Combine(AppPaths.AppFolder, "Signature Test"), true); } catch { }
             try { if (Directory.Exists(Path.Combine(AppPaths.AppFolder, "Valid Signature Test"))) Directory.Delete(Path.Combine(AppPaths.AppFolder, "Valid Signature Test"), true); } catch { }
             try { if (Directory.Exists(Path.Combine(AppPaths.AppFolder, "Unsafe Zip Test"))) Directory.Delete(Path.Combine(AppPaths.AppFolder, "Unsafe Zip Test"), true); } catch { }

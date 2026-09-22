@@ -38,5 +38,27 @@ namespace ElevenLabsMusicGenerator
                 input.CopyTo(output, 64 * 1024);
             }
         }
+
+        public static bool MatchesGeneratedWave(string path, int sampleRate, int durationSeconds)
+        {
+            const int headerBytes = 44;
+            var expectedDataBytes = (long)sampleRate * Channels * BitsPerSample / 8 * durationSeconds;
+            using (var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            using (var reader = new BinaryReader(input, Encoding.ASCII))
+            {
+                if (input.Length != headerBytes + expectedDataBytes) return false;
+                return Encoding.ASCII.GetString(reader.ReadBytes(4)) == "RIFF" &&
+                    reader.ReadUInt32() == input.Length - 8 &&
+                    Encoding.ASCII.GetString(reader.ReadBytes(4)) == "WAVE" &&
+                    Encoding.ASCII.GetString(reader.ReadBytes(4)) == "fmt " &&
+                    reader.ReadUInt32() == 16 && reader.ReadUInt16() == 1 &&
+                    reader.ReadUInt16() == Channels && reader.ReadUInt32() == sampleRate &&
+                    reader.ReadUInt32() == sampleRate * Channels * BitsPerSample / 8 &&
+                    reader.ReadUInt16() == Channels * BitsPerSample / 8 &&
+                    reader.ReadUInt16() == BitsPerSample &&
+                    Encoding.ASCII.GetString(reader.ReadBytes(4)) == "data" &&
+                    reader.ReadUInt32() == expectedDataBytes;
+            }
+        }
     }
 }

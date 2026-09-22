@@ -8,6 +8,7 @@ namespace ElevenLabsMusicGenerator
     internal static class AppPaths
     {
         public static string AppFolder { get { return Application.StartupPath; } }
+        public static string DefaultMusicFolder { get { return Path.Combine(AppFolder, "Music"); } }
         public static string UserFolder { get { return Path.Combine(AppFolder, "User"); } }
         public static string SettingsPath { get { return Path.Combine(AppFolder, "ElevenLabsMusicGenerator.ini"); } }
         public static string ApiKeyPath { get { return Path.Combine(UserFolder, "ApiKey.txt"); } }
@@ -21,6 +22,7 @@ namespace ElevenLabsMusicGenerator
         {
             Directory.CreateDirectory(UserFolder);
             Directory.CreateDirectory(LogFolder);
+            Directory.CreateDirectory(DefaultMusicFolder);
         }
 
         public static string LoadApiKey()

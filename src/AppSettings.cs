@@ -22,7 +22,7 @@ namespace ElevenLabsMusicGenerator
 
         public AppSettings()
         {
-            DefaultOutputFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyMusic);
+            DefaultOutputFolder = AppPaths.DefaultMusicFolder;
             DefaultLengthSeconds = 60;
             DefaultVariations = 2;
             DefaultInstrumental = false;
@@ -39,7 +39,8 @@ namespace ElevenLabsMusicGenerator
         {
             var settings = new AppSettings();
             var ini = IniFile.Load(AppPaths.SettingsPath);
-            settings.DefaultOutputFolder = Environment.ExpandEnvironmentVariables(ini.Get("General", "DefaultOutputFolder", settings.DefaultOutputFolder));
+            var storedOutputFolder = ini.Get("General", "DefaultOutputFolder", settings.DefaultOutputFolder);
+            settings.DefaultOutputFolder = storedOutputFolder == @".\Music" ? AppPaths.DefaultMusicFolder : Environment.ExpandEnvironmentVariables(storedOutputFolder);
             settings.DefaultLengthSeconds = ReadInt(ini, "General", "DefaultLengthSeconds", settings.DefaultLengthSeconds, 3, 600);
             settings.DefaultVariations = ReadInt(ini, "General", "DefaultVariations", settings.DefaultVariations, 1, 10);
             settings.DefaultInstrumental = ReadBool(ini, "General", "DefaultInstrumental", settings.DefaultInstrumental);
@@ -65,7 +66,9 @@ namespace ElevenLabsMusicGenerator
         {
             var ini = new IniFile();
             ini.Set("General", "SettingsVersion", CurrentSettingsVersion.ToString(CultureInfo.InvariantCulture));
-            ini.Set("General", "DefaultOutputFolder", DefaultOutputFolder ?? string.Empty);
+            var outputFolder = DefaultOutputFolder ?? string.Empty;
+            if (string.Equals(Path.GetFullPath(outputFolder), Path.GetFullPath(AppPaths.DefaultMusicFolder), StringComparison.OrdinalIgnoreCase)) outputFolder = @".\Music";
+            ini.Set("General", "DefaultOutputFolder", outputFolder);
             ini.Set("General", "DefaultLengthSeconds", DefaultLengthSeconds.ToString(CultureInfo.InvariantCulture));
             ini.Set("General", "DefaultVariations", DefaultVariations.ToString(CultureInfo.InvariantCulture));
             ini.Set("General", "DefaultInstrumental", DefaultInstrumental.ToString());
