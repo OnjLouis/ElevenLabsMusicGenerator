@@ -31,6 +31,8 @@ namespace ElevenLabsMusicGenerator.Tests
                 Run("Output naming", TestOutputNaming);
                 Run("Mock PCM generation", TestMockPcmGeneration);
                 Run("Shared prompt for variations", TestSharedPromptForVariations);
+                Run("Numeric fields select current value", TestNumericFieldsSelectCurrentValue);
+                Run("API error preserves status and message", TestApiErrorPreservesStatus);
                 Run("Accessible control structure", TestAccessibleControlStructure);
                 Run("Updater arguments", TestUpdaterArguments);
                 Run("Invalid update signature rejection", TestInvalidUpdateSignature);
@@ -194,6 +196,77 @@ namespace ElevenLabsMusicGenerator.Tests
             Assert(!File.Exists(Path.Combine(outputFolder, "Shared_v2.txt")), "The second variation has a redundant prompt file.");
         }
 
+        private static void TestApiErrorPreservesStatus()
+        {
+            var outputFolder = Path.Combine(AppPaths.AppFolder, "Mock Output");
+            Directory.CreateDirectory(outputFolder);
+            var request = new MusicGenerationRequest
+            {
+                Prompt = "An API error must not hide its cause.",
+                LengthSeconds = 12,
+                Variations = 1,
+                OutputFormat = "pcm_44100",
+                ModelId = "music_v2_5",
+                OutputFolder = outputFolder,
+                BaseName = "Rejected"
+            };
+            using (var server = new MockHttpServer(Encoding.UTF8.GetBytes("{\"detail\":{\"message\":\"Generation limit reached\"}}"), "429 Too Many Requests"))
+            {
+                ElevenLabsApiException error = null;
+                try
+                {
+                    new ElevenLabsMusicClient("test-key", server.ApiRoot).GenerateOne(request, request.OutputPaths()[0], 1, CancellationToken.None, null);
+                }
+                catch (ElevenLabsApiException ex) { error = ex; }
+                server.Wait();
+                Assert(error != null, "An API error was not reported as an ElevenLabsApiException.");
+                Assert(error.StatusCode == (HttpStatusCode)429, "HTTP status was lost.");
+                Assert(error.Message == "ElevenLabs returned HTTP 429: Generation limit reached", "API message was lost: " + error.Message);
+                Assert(!File.Exists(request.OutputPaths()[0]), "Rejected generation left an audio file.");
+                Assert(!File.Exists(request.PromptPath()), "Rejected generation left a prompt file.");
+            }
+        }
+
+        private static void TestNumericFieldsSelectCurrentValue()
+        {
+            using (var form = new MainForm(null))
+            {
+                form.StartPosition = FormStartPosition.Manual;
+                form.Location = new System.Drawing.Point(-2000, -2000);
+                form.Show();
+                foreach (var name in new[] { "Length in seconds", "Number of variations" })
+                {
+                    var numeric = Descendants(form).OfType<NumericUpDown>().First(control => control.AccessibleName == name);
+                    numeric.CreateControl();
+                    typeof(Control).GetMethod("OnEnter", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(numeric, new object[] { EventArgs.Empty });
+                    Application.DoEvents();
+                    var edit = numeric.Controls.OfType<TextBox>().First();
+                    Assert(edit.SelectionStart == 0 && edit.SelectionLength == edit.TextLength, name + " was not selected for replacement.");
+                    var replacement = name.IndexOf("length", StringComparison.OrdinalIgnoreCase) >= 0 ? "30" : "3";
+                    edit.SelectedText = replacement;
+                    Assert(numeric.Text == replacement && numeric.Value == decimal.Parse(replacement), name + " did not retain the replacement value.");
+                }
+            }
+            using (var preferences = new PreferencesForm(new AppSettings(), 0))
+            {
+                preferences.StartPosition = FormStartPosition.Manual;
+                preferences.Location = new System.Drawing.Point(-2000, -2000);
+                preferences.Show();
+                foreach (var name in new[] { "Default length in seconds", "Default number of variations" })
+                {
+                    var numeric = Descendants(preferences).OfType<NumericUpDown>().First(control => control.AccessibleName == name);
+                    numeric.CreateControl();
+                    typeof(Control).GetMethod("OnEnter", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(numeric, new object[] { EventArgs.Empty });
+                    Application.DoEvents();
+                    var edit = numeric.Controls.OfType<TextBox>().First();
+                    Assert(edit.SelectionStart == 0 && edit.SelectionLength == edit.TextLength, name + " was not selected for replacement.");
+                    var replacement = name.IndexOf("length", StringComparison.OrdinalIgnoreCase) >= 0 ? "30" : "3";
+                    edit.SelectedText = replacement;
+                    Assert(numeric.Text == replacement && numeric.Value == decimal.Parse(replacement), name + " did not retain the replacement value.");
+                }
+            }
+        }
+
         private static void TestAccessibleControlStructure()
         {
             using (var form = new MainForm(null))
@@ -313,13 +386,15 @@ namespace ElevenLabsMusicGenerator.Tests
         {
             private readonly TcpListener listener;
             private readonly byte[] responseBody;
+            private readonly string responseStatus;
             private readonly Task serverTask;
             public string ApiRoot { get; private set; }
             public string RequestText { get; private set; }
 
-            public MockHttpServer(byte[] responseBody)
+            public MockHttpServer(byte[] responseBody, string responseStatus = "200 OK")
             {
                 this.responseBody = responseBody;
+                this.responseStatus = responseStatus;
                 listener = new TcpListener(IPAddress.Loopback, 0);
                 listener.Start();
                 var port = ((IPEndPoint)listener.LocalEndpoint).Port;
@@ -362,7 +437,7 @@ namespace ElevenLabsMusicGenerator.Tests
                         offset += count;
                     }
                     RequestText = headers + Encoding.UTF8.GetString(body, 0, offset);
-                    var responseHeaders = Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nsong-id: mock-song\r\nContent-Length: " + responseBody.Length + "\r\nConnection: close\r\n\r\n");
+                    var responseHeaders = Encoding.ASCII.GetBytes("HTTP/1.1 " + responseStatus + "\r\nContent-Type: application/octet-stream\r\nsong-id: mock-song\r\nContent-Length: " + responseBody.Length + "\r\nConnection: close\r\n\r\n");
                     stream.Write(responseHeaders, 0, responseHeaders.Length);
                     stream.Write(responseBody, 0, responseBody.Length);
                     stream.Flush();

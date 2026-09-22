@@ -88,9 +88,11 @@ namespace ElevenLabsMusicGenerator
             var generationOptions = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = true, Padding = new Padding(0, 8, 0, 4) };
             generationOptions.Controls.Add(new Label { Text = "&Length in seconds:", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 7, 3, 3) });
             lengthNumeric = new NumericUpDown { Minimum = 3, Maximum = 600, Value = settings.DefaultLengthSeconds, Width = 85, AccessibleName = "Length in seconds" };
+            NumericFieldBehavior.SelectCurrentValueOnFocus(lengthNumeric);
             generationOptions.Controls.Add(lengthNumeric);
             generationOptions.Controls.Add(new Label { Text = "&Variations:", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(16, 7, 3, 3) });
             variationsNumeric = new NumericUpDown { Minimum = 1, Maximum = 10, Value = settings.DefaultVariations, Width = 65, AccessibleName = "Number of variations" };
+            NumericFieldBehavior.SelectCurrentValueOnFocus(variationsNumeric);
             generationOptions.Controls.Add(variationsNumeric);
             instrumentalCheckBox = new CheckBox { Text = "&Instrumental", Checked = settings.DefaultInstrumental, AutoSize = true, Margin = new Padding(16, 6, 3, 3), AccessibleName = "Force instrumental music" };
             generationOptions.Controls.Add(instrumentalCheckBox);

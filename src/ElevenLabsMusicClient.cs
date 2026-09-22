@@ -199,11 +199,13 @@ namespace ElevenLabsMusicGenerator
         private static ElevenLabsApiException CreateApiException(WebException exception)
         {
             var response = exception.Response as HttpWebResponse;
+            HttpStatusCode? statusCode = null;
             var body = string.Empty;
             if (response != null)
             {
                 try
                 {
+                    statusCode = response.StatusCode;
                     using (response)
                     using (var stream = response.GetResponseStream())
                     using (var reader = new StreamReader(stream)) body = reader.ReadToEnd();
@@ -214,7 +216,8 @@ namespace ElevenLabsMusicGenerator
             }
             var message = ExtractErrorMessage(body);
             if (message.Length == 0) message = exception.Message;
-            return new ElevenLabsApiException(message, response == null ? (HttpStatusCode?)null : response.StatusCode, body, exception);
+            if (statusCode.HasValue) message = "ElevenLabs returned HTTP " + (int)statusCode.Value + ": " + message;
+            return new ElevenLabsApiException(message, statusCode, body, exception);
         }
 
         private static string ExtractErrorMessage(string body)

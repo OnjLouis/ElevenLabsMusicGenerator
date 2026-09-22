@@ -57,6 +57,8 @@ namespace ElevenLabsMusicGenerator
 
             lengthNumeric = new NumericUpDown { Minimum = 3, Maximum = 600, Width = 100, AccessibleName = "Default length in seconds" };
             variationsNumeric = new NumericUpDown { Minimum = 1, Maximum = 10, Width = 100, AccessibleName = "Default number of variations" };
+            NumericFieldBehavior.SelectCurrentValueOnFocus(lengthNumeric);
+            NumericFieldBehavior.SelectCurrentValueOnFocus(variationsNumeric);
             instrumentalCheckBox = new CheckBox { Text = "Default to &instrumental music", AutoSize = true, AccessibleName = "Default to instrumental music" };
             formatComboBox = NewDropDown("Default output format", new[] { "PCM 44.1 kHz WAV", "MP3 44.1 kHz, 192 kbps", "MP3 44.1 kHz, 128 kbps" });
             modelComboBox = NewDropDown("Default music model", new[] { "Music v2.5", "Music v2", "Music v1" });
