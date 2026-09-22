@@ -8,6 +8,7 @@ using System.Net.Sockets;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -40,6 +41,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 Run("Preferences own the output folder", TestPreferencesOwnOutputFolder);
                 Run("API error preserves status and message", TestApiErrorPreservesStatus);
                 Run("Accessible control structure", TestAccessibleControlStructure);
+                Run("Manual contents and changelog", TestManualNavigation);
                 Run("Updater arguments", TestUpdaterArguments);
                 Run("Invalid update signature rejection", TestInvalidUpdateSignature);
                 Run("Valid update signature acceptance", TestValidUpdateSignature);
@@ -487,6 +489,18 @@ namespace ElevenLabsMusicGenerator.Tests
             Assert(values.ContainsKey("--apply-update") && values["--apply-update"] == string.Empty, "Updater flag was parsed incorrectly.");
             Assert(values["--update-url"] == "https://example.test/a.zip", "Updater URL was parsed incorrectly.");
             Assert(values["--update-version"] == "1.2.3", "Updater version was parsed incorrectly.");
+        }
+
+        private static void TestManualNavigation()
+        {
+            var html = File.ReadAllText(AppPaths.ManualPath, Encoding.UTF8);
+            Assert(html.Contains("<h2 id=\"changelog\">Changelog</h2>"), "The manual does not place a changelog near the top.");
+            Assert(html.Contains("<h3>" + Program.Version + " - "), "The current version is missing from the manual changelog.");
+            var contents = html.IndexOf("<h2 id=\"contents\">", StringComparison.Ordinal);
+            var changelog = html.IndexOf("<h2 id=\"changelog\">", StringComparison.Ordinal);
+            Assert(contents >= 0 && changelog > contents, "The contents list must lead to the changelog.");
+            foreach (Match match in Regex.Matches(html.Substring(contents, changelog - contents), "href=\"#([a-z-]+)\""))
+                Assert(html.Contains("id=\"" + match.Groups[1].Value + "\""), "The manual contains a broken contents link: " + match.Groups[1].Value);
         }
 
         private static void TestInvalidUpdateSignature()

@@ -28,6 +28,7 @@ if ($LASTEXITCODE -ne 0) {
     throw 'Test harness compilation failed.'
 }
 
+Copy-Item -LiteralPath (Join-Path $root 'Manual.html') -Destination $WorkRoot
 & $testExe
 if ($LASTEXITCODE -ne 0) {
     throw 'One or more tests failed.'

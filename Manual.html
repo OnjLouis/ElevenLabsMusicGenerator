@@ -17,7 +17,40 @@ code { font-family: Consolas, monospace; }
 <h1>ElevenLabs Music Generator</h1>
 <p>ElevenLabs Music Generator is a portable Windows application for creating music from a written prompt through the ElevenLabs Music API.</p>
 
-<h2>First Run</h2>
+<h2 id="contents">Contents</h2>
+<ul>
+<li><a href="#changelog">Changelog</a></li>
+<li><a href="#first-run">First Run</a></li>
+<li><a href="#generating-music">Generating Music</a></li>
+<li><a href="#prompt-drafts">Prompt Drafts</a></li>
+<li><a href="#cancellation-and-failure">Cancellation And Failure</a></li>
+<li><a href="#keyboard-commands">Keyboard Commands</a></li>
+<li><a href="#updates">Updates</a></li>
+<li><a href="#portable-files">Portable Files</a></li>
+</ul>
+
+<h2 id="changelog">Changelog</h2>
+<p>These versions are local previews; no public release has been published yet.</p>
+<h3>0.9.3 - 22 September 2026</h3>
+<ul>
+<li>Made the default Music folder portable and moved output-folder selection into Preferences.</li>
+<li>Added safe resumption of missing variations without overwriting completed tracks.</li>
+<li>Improved menu and button shortcut announcements, added Alt+M and Alt+S focus keys, and made manual prompt saves start in the selected music folder.</li>
+</ul>
+<h3>0.9.2 - 22 September 2026</h3>
+<ul>
+<li>Made length and variation values replaceable by typing, and preserved ElevenLabs HTTP error details.</li>
+</ul>
+<h3>0.9.1 - 22 September 2026</h3>
+<ul>
+<li>Saved one shared prompt text file for all variations in a batch.</li>
+</ul>
+<h3>0.9.0 - 22 September 2026</h3>
+<ul>
+<li>Introduced the native portable Windows application, accessible prompt editor, direct ElevenLabs generation, preferences, cancellation, draft recovery, and the signed-update framework.</li>
+</ul>
+
+<h2 id="first-run">First Run</h2>
 <ol>
 <li>Open <strong>Options, Preferences</strong>.</li>
 <li>Select the <strong>API key</strong> tab and enter your ElevenLabs API key.</li>
@@ -27,7 +60,7 @@ code { font-family: Consolas, monospace; }
 <p>On a new portable installation, the application creates a <code>Music</code> folder beside the executable and uses it by default. This location remains relative when you move the application. A custom output folder can be chosen only in Preferences; existing installations keep their saved choice.</p>
 <p>The key is stored as plain text in <code>User\ApiKey.txt</code> to preserve portability. Keep that file private and do not include the User folder when sharing the application.</p>
 
-<h2>Generating Music</h2>
+<h2 id="generating-music">Generating Music</h2>
 <ol>
 <li>Write or paste a prompt into the standard multiline Prompt field.</li>
 <li>Choose the length, number of variations, and whether the result must be instrumental.</li>
@@ -39,13 +72,13 @@ code { font-family: Consolas, monospace; }
 <p>When you move into a length or variations field, its current number is selected so that typing replaces it. Review the length and variation count in the confirmation dialog before spending credits.</p>
 <p>If a batch was interrupted, Generate checks the existing tracks and offers to make only missing variations. The saved prompt must match, and existing WAV files must have the expected format and duration. An existing MP3's duration cannot be verified automatically, so review the confirmation carefully. If a check fails, choose a different base filename; existing tracks are never overwritten. Avoid changing the model or instrumental setting while resuming an older batch.</p>
 
-<h2>Prompt Drafts</h2>
+<h2 id="prompt-drafts">Prompt Drafts</h2>
 <p>The prompt is saved automatically to <code>User\Prompt draft.txt</code> after editing and when the application closes. It is restored on the next launch. The first manual Save Prompt opens the Save dialog in the music output folder selected in Preferences. Later saves update the chosen file; Save As starts in the current music output folder.</p>
 
-<h2>Cancellation And Failure</h2>
+<h2 id="cancellation-and-failure">Cancellation And Failure</h2>
 <p>Cancel stops the active request and removes incomplete temporary files. Variations completed before cancellation or a later failure are kept. Output is first written to temporary files beside the destination and moved into place only when complete.</p>
 
-<h2>Keyboard Commands</h2>
+<h2 id="keyboard-commands">Keyboard Commands</h2>
 <table>
 <thead><tr><th>Command</th><th>Shortcut</th></tr></thead>
 <tbody>
@@ -64,7 +97,10 @@ code { font-family: Consolas, monospace; }
 </tbody>
 </table>
 
-<h2>Portable Files</h2>
+<h2 id="updates">Updates</h2>
+<p>Update checks are available from Help and can be scheduled in Preferences. Automatic checks default to Never. An install requires a ZIP and a valid matching signature; unsigned or invalid packages are not installed. No public update channel exists for this local preview yet.</p>
+
+<h2 id="portable-files">Portable Files</h2>
 <p><code>ElevenLabsMusicGenerator.ini</code> contains ordinary preferences. The <code>Music</code> folder is the default output on a new installation. Manually saved prompts and generated audio share the chosen output folder. The <code>User</code> folder contains the API key, prompt draft, and bounded diagnostic logs. Keep both folders private when sharing the application. The program does not use the registry or extract a runtime at startup.</p>
 </main>
 </body>
