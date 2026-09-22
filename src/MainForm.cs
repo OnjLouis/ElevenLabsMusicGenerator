@@ -102,16 +102,16 @@ namespace ElevenLabsMusicGenerator
             root.Controls.Add(nameRow, 0, 3);
 
             var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(0, 8, 0, 4) };
-            generateButton = NewButton("Generate", "Generate missing music variations and spend ElevenLabs credits");
+            generateButton = NewButton("Generate", "Generate missing music variations and spend ElevenLabs credits", "Ctrl+Enter");
             generateButton.Click += delegate { StartGeneration(); };
-            cancelButton = NewButton("&Cancel", "Cancel the current generation");
+            cancelButton = NewButton("&Cancel", "Cancel the current generation", "Esc");
             cancelButton.Enabled = false;
             cancelButton.Click += delegate { CancelGeneration(); };
-            openOutputButton = NewButton("Open Output Folder", "Open the Preferences output folder in File Explorer");
+            openOutputButton = NewButton("Open Output Folder", "Open the Preferences output folder in File Explorer", "Ctrl+Shift+O");
             openOutputButton.Click += delegate { OpenOutputFolder(); };
-            var preferencesButton = NewButton("P&references...", "Open preferences");
+            var preferencesButton = NewButton("P&references...", "Open preferences", "Ctrl+,");
             preferencesButton.Click += delegate { ShowPreferences(0); };
-            var helpButton = NewButton("Help", "Open the HTML manual");
+            var helpButton = NewButton("Help", "Open the HTML manual", "F1");
             helpButton.Click += delegate { OpenManual(); };
             buttons.Controls.Add(generateButton);
             buttons.Controls.Add(cancelButton);
@@ -383,6 +383,7 @@ namespace ElevenLabsMusicGenerator
             {
                 dialog.Title = "Open music prompt";
                 dialog.Filter = "Prompt files (*.txt;*.ini)|*.txt;*.ini|All files (*.*)|*.*";
+                if (Directory.Exists(settings.DefaultOutputFolder)) dialog.InitialDirectory = settings.DefaultOutputFolder;
                 if (dialog.ShowDialog(this) == DialogResult.OK) LoadPromptFile(dialog.FileName);
             }
         }
@@ -435,21 +436,25 @@ namespace ElevenLabsMusicGenerator
 
         private void SavePrompt(bool saveAs)
         {
-            if (saveAs || string.IsNullOrWhiteSpace(currentPromptPath) || Path.GetExtension(currentPromptPath).Equals(".ini", StringComparison.OrdinalIgnoreCase))
-            {
-                using (var dialog = new SaveFileDialog())
-                {
-                    dialog.Title = "Save music prompt";
-                    dialog.Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*";
-                    dialog.DefaultExt = "txt";
-                    dialog.AddExtension = true;
-                    dialog.FileName = FileNameHelper.SafeStem(baseNameTextBox.Text, promptTextBox.Text) + ".txt";
-                    if (dialog.ShowDialog(this) != DialogResult.OK) return;
-                    currentPromptPath = dialog.FileName;
-                }
-            }
             try
             {
+                if (saveAs || string.IsNullOrWhiteSpace(currentPromptPath) || Path.GetExtension(currentPromptPath).Equals(".ini", StringComparison.OrdinalIgnoreCase))
+                {
+                    var folder = Environment.ExpandEnvironmentVariables((settings.DefaultOutputFolder ?? string.Empty).Trim().Trim('"'));
+                    if (folder.Length == 0) throw new InvalidOperationException("Choose an output folder in Preferences before saving a prompt.");
+                    Directory.CreateDirectory(folder);
+                    using (var dialog = new SaveFileDialog())
+                    {
+                        dialog.Title = "Save music prompt";
+                        dialog.Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*";
+                        dialog.DefaultExt = "txt";
+                        dialog.AddExtension = true;
+                        dialog.InitialDirectory = folder;
+                        dialog.FileName = FileNameHelper.SafeStem(baseNameTextBox.Text, promptTextBox.Text) + ".txt";
+                        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+                        currentPromptPath = dialog.FileName;
+                    }
+                }
                 File.WriteAllText(currentPromptPath, promptTextBox.Text.TrimEnd() + Environment.NewLine, new UTF8Encoding(false));
                 SetStatus("Saved prompt: " + Path.GetFileName(currentPromptPath));
             }
@@ -545,9 +550,9 @@ namespace ElevenLabsMusicGenerator
             return panel;
         }
 
-        private static Button NewButton(string text, string description)
+        private static Button NewButton(string text, string description, string shortcut = null)
         {
-            return new Button { Text = text, AutoSize = true, AccessibleDescription = description };
+            return new ShortcutButton { Text = text, AutoSize = true, AccessibleDescription = description, ShortcutText = shortcut };
         }
 
         private static string FormatBytes(long value)

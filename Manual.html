@@ -40,7 +40,7 @@ code { font-family: Consolas, monospace; }
 <p>If a batch was interrupted, Generate checks the existing tracks and offers to make only missing variations. The saved prompt must match, and existing WAV files must have the expected format and duration. An existing MP3's duration cannot be verified automatically, so review the confirmation carefully. If a check fails, choose a different base filename; existing tracks are never overwritten. Avoid changing the model or instrumental setting while resuming an older batch.</p>
 
 <h2>Prompt Drafts</h2>
-<p>The prompt is saved automatically to <code>User\Prompt draft.txt</code> after editing and when the application closes. It is restored on the next launch. Use File, Save Prompt to keep a separately named prompt file.</p>
+<p>The prompt is saved automatically to <code>User\Prompt draft.txt</code> after editing and when the application closes. It is restored on the next launch. The first manual Save Prompt opens the Save dialog in the music output folder selected in Preferences. Later saves update the chosen file; Save As starts in the current music output folder.</p>
 
 <h2>Cancellation And Failure</h2>
 <p>Cancel stops the active request and removes incomplete temporary files. Variations completed before cancellation or a later failure are kept. Output is first written to temporary files beside the destination and moved into place only when complete.</p>
@@ -63,7 +63,7 @@ code { font-family: Consolas, monospace; }
 </table>
 
 <h2>Portable Files</h2>
-<p><code>ElevenLabsMusicGenerator.ini</code> contains ordinary preferences. The <code>Music</code> folder is the default output on a new installation. The <code>User</code> folder contains the API key, prompt draft, and bounded diagnostic logs. Keep both folders private when sharing the application. The program does not use the registry or extract a runtime at startup.</p>
+<p><code>ElevenLabsMusicGenerator.ini</code> contains ordinary preferences. The <code>Music</code> folder is the default output on a new installation. Manually saved prompts and generated audio share the chosen output folder. The <code>User</code> folder contains the API key, prompt draft, and bounded diagnostic logs. Keep both folders private when sharing the application. The program does not use the registry or extract a runtime at startup.</p>
 </main>
 </body>
 </html>

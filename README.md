@@ -9,6 +9,7 @@ An accessible, portable Windows application for generating music through the Ele
 - No Python, bundled runtime, registry settings, installation, or startup extraction.
 - Portable settings beside the executable and private changing data under `User`.
 - A relative `Music` folder beside the executable for new installs; custom output folders are selected in Preferences.
+- Manually saved prompts and generated audio use the selected output folder.
 - Atomic audio output, cancellation cleanup, draft recovery, and one shared prompt file per generation batch.
 - Interrupted batches resume only missing variations after checking existing tracks.
 

@@ -384,6 +384,20 @@ namespace ElevenLabsMusicGenerator.Tests
                     Assert(item.ShortcutKeyDisplayString == shortcut, item.Text + " does not show " + shortcut + " in the menu.");
                     Assert(string.IsNullOrEmpty(item.AccessibleDescription), item.Text + " repeats the shortcut in its accessibility description.");
                 }
+
+                var buttonShortcuts = new Dictionary<string, string>
+                {
+                    { "Generate", "Ctrl+Enter" }, { "&Cancel", "Esc" },
+                    { "Open Output Folder", "Ctrl+Shift+O" }, { "P&references...", "Ctrl+," },
+                    { "Help", "F1" }
+                };
+                foreach (var button in Descendants(form).OfType<Button>())
+                {
+                    string shortcut;
+                    if (!buttonShortcuts.TryGetValue(button.Text, out shortcut)) continue;
+                    Assert(button.AccessibilityObject.KeyboardShortcut == shortcut, button.Text + " does not expose " + shortcut + " to a screen reader.");
+                    Assert(button.AccessibleDescription.IndexOf("shortcut", StringComparison.OrdinalIgnoreCase) < 0, button.Text + " repeats shortcut wording in its description.");
+                }
             }
         }
 
