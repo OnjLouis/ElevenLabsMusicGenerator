@@ -185,7 +185,7 @@ namespace ElevenLabsMusicGenerator
 
         private static ToolStripMenuItem MenuCommand(string label, EventHandler action, Keys shortcut, string display)
         {
-            var item = new ToolStripMenuItem(label, null, action) { ShortcutKeyDisplayString = display, AccessibleDescription = "Keyboard shortcut " + display };
+            var item = new ToolStripMenuItem(label, null, action) { ShortcutKeyDisplayString = display };
             if (shortcut != Keys.None) item.ShortcutKeys = shortcut;
             return item;
         }

@@ -382,6 +382,7 @@ namespace ElevenLabsMusicGenerator.Tests
                     string shortcut;
                     if (!expected.TryGetValue(item.Text, out shortcut)) continue;
                     Assert(item.ShortcutKeyDisplayString == shortcut, item.Text + " does not show " + shortcut + " in the menu.");
+                    Assert(string.IsNullOrEmpty(item.AccessibleDescription), item.Text + " repeats the shortcut in its accessibility description.");
                 }
             }
         }
