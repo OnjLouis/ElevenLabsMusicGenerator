@@ -36,6 +36,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 Run("Resume only unfinished variations", TestResumeOnlyUnfinishedVariations);
                 Run("Numeric fields select current value", TestNumericFieldsSelectCurrentValue);
                 Run("Main window mnemonics", TestMainWindowMnemonics);
+                Run("Main window focus shortcuts", TestMainWindowFocusShortcuts);
                 Run("Preferences own the output folder", TestPreferencesOwnOutputFolder);
                 Run("API error preserves status and message", TestApiErrorPreservesStatus);
                 Run("Accessible control structure", TestAccessibleControlStructure);
@@ -382,7 +383,7 @@ namespace ElevenLabsMusicGenerator.Tests
                     string shortcut;
                     if (!expected.TryGetValue(item.Text, out shortcut)) continue;
                     Assert(item.ShortcutKeyDisplayString == shortcut, item.Text + " does not show " + shortcut + " in the menu.");
-                    Assert(string.IsNullOrEmpty(item.AccessibleDescription), item.Text + " repeats the shortcut in its accessibility description.");
+                    Assert(item.AccessibleDescription == shortcut, item.Text + " does not announce only " + shortcut + ".");
                 }
 
                 var buttonShortcuts = new Dictionary<string, string>
@@ -398,6 +399,11 @@ namespace ElevenLabsMusicGenerator.Tests
                     Assert(button.AccessibilityObject.KeyboardShortcut == shortcut, button.Text + " does not expose " + shortcut + " to a screen reader.");
                     Assert(button.AccessibleDescription.IndexOf("shortcut", StringComparison.OrdinalIgnoreCase) < 0, button.Text + " repeats shortcut wording in its description.");
                 }
+
+                var prompt = Descendants(form).OfType<TextBox>().First(control => control.AccessibleName == "Music prompt");
+                var status = Descendants(form).OfType<TextBox>().First(control => control.AccessibleName == "Status log");
+                Assert(prompt.AccessibilityObject.KeyboardShortcut == "Alt+M", "Music prompt does not expose Alt+M.");
+                Assert(status.AccessibilityObject.KeyboardShortcut == "Alt+S", "Status log does not expose Alt+S.");
             }
         }
 
@@ -422,6 +428,23 @@ namespace ElevenLabsMusicGenerator.Tests
             Assert(saved.DefaultVariations == 3, "Main window variations were not remembered.");
         }
 
+        private static void TestMainWindowFocusShortcuts()
+        {
+            using (var form = new MainForm(null))
+            {
+                form.StartPosition = FormStartPosition.Manual;
+                form.Location = new System.Drawing.Point(-2000, -2000);
+                form.Show();
+                var prompt = Descendants(form).OfType<TextBox>().First(control => control.AccessibleName == "Music prompt");
+                var status = Descendants(form).OfType<TextBox>().First(control => control.AccessibleName == "Status log");
+                var method = typeof(MainForm).GetMethod("ProcessCmdKey", BindingFlags.Instance | BindingFlags.NonPublic);
+                var message = Message.Create(IntPtr.Zero, 0, IntPtr.Zero, IntPtr.Zero);
+                Assert((bool)method.Invoke(form, new object[] { message, Keys.Alt | Keys.S }) && status.Focused, "Alt+S did not focus the status log.");
+                Assert((bool)method.Invoke(form, new object[] { message, Keys.Alt | Keys.M }) && prompt.Focused, "Alt+M did not focus the music prompt.");
+                form.Close();
+            }
+        }
+
         private static char? Mnemonic(string text)
         {
             for (var index = 0; index + 1 < text.Length; index++)
@@ -443,7 +466,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 Assert(prompt != null && prompt.Multiline && prompt.AcceptsReturn && prompt.MaxLength == 4100, "Accessible multiline prompt editor is missing or misconfigured.");
                 Assert(controls.OfType<NumericUpDown>().Any(control => control.AccessibleName == "Length in seconds"), "Length control is missing.");
                 Assert(controls.OfType<NumericUpDown>().Any(control => control.AccessibleName == "Number of variations"), "Variation control is missing.");
-                Assert(controls.OfType<TextBox>().Any(control => control.AccessibleName == "Status" && control.ReadOnly), "Focusable status control is missing.");
+                Assert(controls.OfType<TextBox>().Any(control => control.AccessibleName == "Status log" && control.ReadOnly), "Focusable status control is missing.");
                 Assert(form.MainMenuStrip != null && form.MainMenuStrip.Items.Count == 4, "Main menu structure is wrong.");
             }
 

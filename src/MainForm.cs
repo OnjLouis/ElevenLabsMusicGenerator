@@ -62,13 +62,13 @@ namespace ElevenLabsMusicGenerator
             var promptHeader = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2 };
             promptHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             promptHeader.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            var promptLabel = new Label { Text = "&Prompt:", AutoSize = true, Anchor = AnchorStyles.Left, UseMnemonic = true };
+            var promptLabel = new Label { Text = "&Music prompt:", AutoSize = true, Anchor = AnchorStyles.Left, UseMnemonic = true };
             characterCountLabel = new Label { Text = "0 of 4100 characters", AutoSize = true, Anchor = AnchorStyles.Right, AccessibleName = "Prompt character count" };
             promptHeader.Controls.Add(promptLabel, 0, 0);
             promptHeader.Controls.Add(characterCountLabel, 1, 0);
             root.Controls.Add(promptHeader, 0, 0);
 
-            promptTextBox = new TextBox
+            promptTextBox = new ShortcutTextBox
             {
                 Dock = DockStyle.Fill,
                 Multiline = true,
@@ -78,7 +78,8 @@ namespace ElevenLabsMusicGenerator
                 WordWrap = true,
                 MaxLength = 4100,
                 AccessibleName = "Music prompt",
-                AccessibleDescription = "Describe the music to generate. This is a standard multiline edit field."
+                AccessibleDescription = "Describe the music to generate. This is a standard multiline edit field.",
+                ShortcutText = "Alt+M"
             };
             promptTextBox.TextChanged += PromptTextChanged;
             root.Controls.Add(promptTextBox, 0, 1);
@@ -120,16 +121,19 @@ namespace ElevenLabsMusicGenerator
             buttons.Controls.Add(helpButton);
             root.Controls.Add(buttons, 0, 4);
 
-            var statusPanel = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1, RowCount = 2 };
+            var statusPanel = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1, RowCount = 3 };
+            var statusLabel = new Label { Text = "&Status log:", AutoSize = true, UseMnemonic = true };
             progressBar = new ProgressBar { Dock = DockStyle.Top, Height = 18, Style = ProgressBarStyle.Continuous, AccessibleName = "Generation progress" };
-            statusTextBox = new AccessibleStatusTextBox { Dock = DockStyle.Top, ReadOnly = true, TabStop = true, Text = "Ready.", AccessibleName = "Status" };
-            statusPanel.Controls.Add(progressBar, 0, 0);
-            statusPanel.Controls.Add(statusTextBox, 0, 1);
+            statusTextBox = new AccessibleStatusTextBox { Dock = DockStyle.Top, ReadOnly = true, TabStop = true, Text = "Ready.", AccessibleName = "Status log", ShortcutText = "Alt+S" };
+            statusPanel.Controls.Add(statusLabel, 0, 0);
+            statusPanel.Controls.Add(progressBar, 0, 1);
+            statusPanel.Controls.Add(statusTextBox, 0, 2);
             root.Controls.Add(statusPanel, 0, 5);
 
             Controls.Add(root);
             MainMenuStrip.BringToFront();
             promptLabel.Click += delegate { promptTextBox.Focus(); };
+            statusLabel.Click += delegate { statusTextBox.Focus(); };
 
             draftTimer = new System.Windows.Forms.Timer { Interval = 1000 };
             draftTimer.Tick += delegate { draftTimer.Stop(); SaveDraftNonFatal(); };
@@ -145,6 +149,8 @@ namespace ElevenLabsMusicGenerator
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
+            if (keyData == (Keys.Alt | Keys.M)) { promptTextBox.Focus(); return true; }
+            if (keyData == (Keys.Alt | Keys.S)) { statusTextBox.Focus(); return true; }
             if (keyData == (Keys.Control | Keys.Enter)) { StartGeneration(); return true; }
             if (keyData == Keys.Escape && generationRunning) { CancelGeneration(); return true; }
             if (keyData == (Keys.Control | Keys.Oemcomma)) { ShowPreferences(0); return true; }
@@ -185,7 +191,7 @@ namespace ElevenLabsMusicGenerator
 
         private static ToolStripMenuItem MenuCommand(string label, EventHandler action, Keys shortcut, string display)
         {
-            var item = new ToolStripMenuItem(label, null, action) { ShortcutKeyDisplayString = display };
+            var item = new ToolStripMenuItem(label, null, action) { ShortcutKeyDisplayString = display, AccessibleDescription = display };
             if (shortcut != Keys.None) item.ShortcutKeys = shortcut;
             return item;
         }
