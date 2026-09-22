@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ElevenLabs Music Generator Help</title>
+<style>
+body { font-family: Segoe UI, sans-serif; line-height: 1.55; max-width: 60rem; margin: 2rem auto; padding: 0 1rem; color: #171717; background: #fff; }
+h1, h2 { line-height: 1.2; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border: 1px solid #777; padding: .45rem; text-align: left; vertical-align: top; }
+code { font-family: Consolas, monospace; }
+</style>
+</head>
+<body>
+<main>
+<h1>ElevenLabs Music Generator</h1>
+<p>ElevenLabs Music Generator is a portable Windows application for creating music from a written prompt through the ElevenLabs Music API.</p>
+
+<h2>First Run</h2>
+<ol>
+<li>Open <strong>Options, Preferences</strong>.</li>
+<li>Select the <strong>API key</strong> tab and enter your ElevenLabs API key.</li>
+<li>Use <strong>Test API key</strong> to verify it without generating music or spending credits.</li>
+<li>On the General tab, choose the default output folder, duration, variations, format, and model.</li>
+</ol>
+<p>The key is stored as plain text in <code>User\ApiKey.txt</code> to preserve portability. Keep that file private and do not include the User folder when sharing the application.</p>
+
+<h2>Generating Music</h2>
+<ol>
+<li>Write or paste a prompt into the standard multiline Prompt field.</li>
+<li>Choose the length, number of variations, and whether the result must be instrumental.</li>
+<li>Review the automatically suggested base filename and output folder.</li>
+<li>Press <strong>Generate</strong> or <kbd>Ctrl</kbd>+<kbd>Enter</kbd>.</li>
+<li>Review the confirmation carefully. Generation starts only after you confirm that ElevenLabs credits will be spent.</li>
+</ol>
+<p>Each completed audio file receives a matching text file containing the exact prompt. For multiple variations, both the audio and text files use the suffixes <code>_v1</code>, <code>_v2</code>, and so on.</p>
+
+<h2>Prompt Drafts</h2>
+<p>The prompt is saved automatically to <code>User\Prompt draft.txt</code> after editing and when the application closes. It is restored on the next launch. Use File, Save Prompt to keep a separately named prompt file.</p>
+
+<h2>Cancellation And Failure</h2>
+<p>Cancel stops the active request and removes incomplete temporary files. Variations completed before cancellation or a later failure are kept. Output is first written to temporary files beside the destination and moved into place only when complete.</p>
+
+<h2>Keyboard Commands</h2>
+<table>
+<thead><tr><th>Command</th><th>Shortcut</th></tr></thead>
+<tbody>
+<tr><td>New prompt</td><td>Ctrl+N</td></tr>
+<tr><td>Open prompt</td><td>Ctrl+O</td></tr>
+<tr><td>Save prompt</td><td>Ctrl+S</td></tr>
+<tr><td>Save prompt as</td><td>Ctrl+Shift+S</td></tr>
+<tr><td>Generate music</td><td>Ctrl+Enter</td></tr>
+<tr><td>Cancel generation</td><td>Escape while generating</td></tr>
+<tr><td>Open Preferences</td><td>Ctrl+,</td></tr>
+<tr><td>Check for updates</td><td>Shift+F1</td></tr>
+<tr><td>Open this manual</td><td>F1</td></tr>
+</tbody>
+</table>
+
+<h2>Portable Files</h2>
+<p><code>ElevenLabsMusicGenerator.ini</code> contains ordinary preferences. The <code>User</code> folder contains the API key, prompt draft, and bounded diagnostic logs. The program does not use the registry or extract a runtime at startup.</p>
+</main>
+</body>
+</html>

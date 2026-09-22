@@ -1,0 +1,12 @@
+/ElevenLabsMusicGenerator.ini
+/User/
+/bin/
+/obj/
+/build/
+/dist/
+/release/
+/release-stage/
+*.zip
+*.7z
+*.sig
+*.log
