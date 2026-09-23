@@ -62,6 +62,9 @@ namespace ElevenLabsMusicGenerator
                 }
 
                 var targetExe = Path.Combine(targetRoot, ProgramFiles[0]);
+#if PRIVATE_TEST
+                if (SuppressRestartForTest) return;
+#endif
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = targetExe,
@@ -74,9 +77,16 @@ namespace ElevenLabsMusicGenerator
             {
                 try { if (Directory.Exists(rollback)) RestoreRollback(target, rollback); } catch { }
                 WriteUpdateError(target, ex);
+#if PRIVATE_TEST
+                if (SuppressRestartForTest) throw;
+#endif
                 MessageBox.Show("The update could not be installed." + Environment.NewLine + Environment.NewLine + ex.Message + Environment.NewLine + Environment.NewLine + "The previous program files were retained or restored.", "Update failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+
+#if PRIVATE_TEST
+        internal static bool SuppressRestartForTest;
+#endif
 
         public static void ScheduleCleanupFromCommandLine(string[] args)
         {

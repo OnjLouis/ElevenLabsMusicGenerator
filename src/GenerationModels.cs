@@ -10,11 +10,14 @@ namespace ElevenLabsMusicGenerator
     {
         public string Prompt { get; set; }
         public int LengthSeconds { get; set; }
+        public int LengthMilliseconds { get { return Plan == null ? LengthSeconds * 1000 : Plan.TotalMilliseconds; } }
         public int Variations { get; set; }
         public bool Instrumental { get; set; }
         public string OutputFormat { get; set; }
         public string ModelId { get; set; }
         public int? Seed { get; set; }
+        public MusicCompositionPlan Plan { get; set; }
+        public bool IncludeDetails { get; set; }
         public string OutputFolder { get; set; }
         public string BaseName { get; set; }
 
@@ -29,8 +32,10 @@ namespace ElevenLabsMusicGenerator
 
         public string PromptPath()
         {
-            return Path.Combine(OutputFolder, FileNameHelper.SafeStem(BaseName, Prompt) + ".txt");
+            return Path.Combine(OutputFolder, FileNameHelper.SafeStem(BaseName, Prompt) + (Plan == null ? ".txt" : ".plan.json"));
         }
+
+        public string SourceText() { return Plan == null ? Prompt.TrimEnd() : Plan.ToJson(); }
     }
 
     internal static class FileNameHelper
@@ -63,5 +68,8 @@ namespace ElevenLabsMusicGenerator
         public string PromptPath { get; set; }
         public long AudioBytes { get; set; }
         public string SongId { get; set; }
+        public string DetailsPath { get; set; }
+        public string LyricsPath { get; set; }
+        public TimeSpan Elapsed { get; set; }
     }
 }

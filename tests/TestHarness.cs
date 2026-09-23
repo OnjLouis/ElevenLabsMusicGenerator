@@ -27,9 +27,19 @@ namespace ElevenLabsMusicGenerator.Tests
             try
             {
                 if (args.Length == 2 && args[0] == "--live-auth-env") return RunLiveAuthentication(args[1]);
+                if (args.Length == 3 && args[0] == "--live-detail-smoke") return RunLiveDetailSmoke(args[1], args[2]);
+                if (args.Length == 2 && args[0] == "--live-plan-smoke") return RunLivePlanSmoke(args[1]);
+                if (args.Length == 3 && args[0] == "--live-plan-compose-smoke") return RunLivePlanComposeSmoke(args[1], args[2]);
+                if (args.Length == 2 && args[0] == "--private-updater-smoke") return RunPrivateUpdaterSmoke(args[1]);
                 Run("Settings round trip", TestSettingsRoundTrip);
                 Run("Portable music folder default", TestPortableMusicFolderDefault);
                 Run("Legacy API key migration", TestLegacyApiKeyMigration);
+                Run("Plaintext API key migration", TestPlaintextApiKeyMigration);
+                Run("Protected API key round trip", TestProtectedApiKeyRoundTrip);
+                Run("Unreadable protected API key", TestUnreadableProtectedApiKey);
+                Run("Shared protected key migration", TestSharedProtectedKeyMigration);
+                Run("Foreign protected key is preserved", TestForeignProtectedKeyIsPreserved);
+                Run("Readable per-track timing", TestReadableRunStatistics);
                 Run("Output naming", TestOutputNaming);
                 Run("Mock PCM generation", TestMockPcmGeneration);
                 Run("Existing audio is never overwritten", TestExistingAudioIsNeverOverwritten);
@@ -38,10 +48,20 @@ namespace ElevenLabsMusicGenerator.Tests
                 Run("Numeric fields select current value", TestNumericFieldsSelectCurrentValue);
                 Run("Main window mnemonics", TestMainWindowMnemonics);
                 Run("Main window focus shortcuts", TestMainWindowFocusShortcuts);
+                Run("Plan editor keyboard and duration", TestPlanEditorKeyboardAndDuration);
                 Run("Preferences own the output folder", TestPreferencesOwnOutputFolder);
+                Run("Preferences button order", TestPreferencesButtonOrder);
                 Run("API error preserves status and message", TestApiErrorPreservesStatus);
                 Run("Accessible control structure", TestAccessibleControlStructure);
                 Run("Manual contents and changelog", TestManualNavigation);
+                Run("Composition plan validation and round trip", TestCompositionPlan);
+                Run("Track details can reopen a composition plan", TestDetailsPlanImport);
+                Run("Fractional plan durations", TestFractionalPlanDurations);
+                Run("Create composition plan request", TestCreateCompositionPlanRequest);
+                Run("Music API key test uses plan endpoint", TestMusicApiKeyRequest);
+                Run("Composition plan request and resume", TestCompositionPlanRequest);
+                Run("Detailed response audio and lyrics", TestDetailedResponse);
+                Run("Detailed response avoids cross-format sidecar collisions", TestDetailedResponseFormatCollision);
                 Run("Updater arguments", TestUpdaterArguments);
                 Run("Invalid update signature rejection", TestInvalidUpdateSignature);
                 Run("Valid update signature acceptance", TestValidUpdateSignature);
@@ -71,6 +91,113 @@ namespace ElevenLabsMusicGenerator.Tests
             return 0;
         }
 
+        private static int RunLiveDetailSmoke(string keyPath, string outputFolder)
+        {
+            var key = File.ReadAllText(keyPath, Encoding.UTF8).Trim();
+            if (key.Length == 0) throw new InvalidDataException("The API key file is empty.");
+            var client = new ElevenLabsMusicClient(key);
+            var request = new MusicGenerationRequest
+            {
+                Prompt = "A gentle three-second instrumental piano phrase, clean recording, no vocals.",
+                LengthSeconds = 3, Variations = 1, Instrumental = true, IncludeDetails = true,
+                ModelId = "music_v2_5", OutputFormat = "mp3_48000_192", OutputFolder = outputFolder,
+                BaseName = "Detail_Smoke_" + DateTime.UtcNow.ToString("yyyyMMdd_HHmmss")
+            };
+            var result = client.GenerateOne(request, request.OutputPaths()[0], 1, CancellationToken.None, null);
+            Console.WriteLine("Audio: " + result.OutputPath);
+            Console.WriteLine("Details: " + result.DetailsPath);
+            Console.WriteLine("Returned lyrics file: " + (result.LyricsPath ?? "none for instrumental test"));
+            Console.WriteLine("Elapsed seconds: " + result.Elapsed.TotalSeconds.ToString("0.0"));
+            return 0;
+        }
+
+        private static int RunLivePlanSmoke(string keyPath)
+        {
+            var key = File.ReadAllText(keyPath, Encoding.UTF8).Trim();
+            if (key.Length == 0) throw new InvalidDataException("The API key file is empty.");
+            var plan = new ElevenLabsMusicClient(key).CreateCompositionPlan("A concise instrumental piano introduction with a clear ending.", 10, "music_v2_5", CancellationToken.None);
+            Console.WriteLine("Sections: " + plan.Sections.Count + "; total seconds: " + (plan.TotalMilliseconds / 1000m).ToString("0.###"));
+            return 0;
+        }
+
+        private static int RunLivePlanComposeSmoke(string keyPath, string outputFolder)
+        {
+            var key = File.ReadAllText(keyPath, Encoding.UTF8).Trim();
+            if (key.Length == 0) throw new InvalidDataException("The API key file is empty.");
+            var plan = new MusicCompositionPlan();
+            plan.Sections.Add(new MusicSection { Name = "Verse", Body = "Hello today\nWelcome to the light", DurationSeconds = 8, PositiveStyles = "gentle piano\nfemale vocal", ContextAdherence = "high" });
+            var request = new MusicGenerationRequest
+            {
+                Plan = plan, Prompt = string.Empty, LengthSeconds = 8, Variations = 1, IncludeDetails = true,
+                ModelId = "music_v2_5", OutputFormat = "mp3_48000_192", OutputFolder = outputFolder,
+                BaseName = "Plan_Smoke_" + DateTime.UtcNow.ToString("yyyyMMdd_HHmmss")
+            };
+            var result = new ElevenLabsMusicClient(key).GenerateOne(request, request.OutputPaths()[0], 1, CancellationToken.None, null);
+            Console.WriteLine("Audio: " + result.OutputPath);
+            Console.WriteLine("Details: " + result.DetailsPath);
+            Console.WriteLine("Lyrics: " + (result.LyricsPath ?? "not returned"));
+            Console.WriteLine("Elapsed seconds: " + result.Elapsed.TotalSeconds.ToString("0.0"));
+            return 0;
+        }
+
+        private static int RunPrivateUpdaterSmoke(string packageFolder)
+        {
+            var package = Path.Combine(packageFolder, "ElevenLabsMusicGenerator.zip");
+            var portable = Path.Combine(packageFolder, "portable");
+            if (!File.Exists(package) || !Directory.Exists(portable)) throw new FileNotFoundException("Build the candidate package first.");
+            var target = Path.Combine(AppPaths.AppFolder, "Updater E2E target");
+            Directory.CreateDirectory(target);
+            foreach (var name in new[] { "ElevenLabsMusicGenerator.exe", "Manual.html", "LICENSE.txt" })
+                File.Copy(Path.Combine(portable, name), Path.Combine(target, name), true);
+            File.WriteAllText(Path.Combine(target, "Manual.html"), "old manual sentinel");
+            Directory.CreateDirectory(Path.Combine(target, "User"));
+            Directory.CreateDirectory(Path.Combine(target, "Music"));
+            var protectedTestKey = ApiKeyProtector.Protect("private test sentinel");
+            var targetKeyPath = Path.Combine(target, "User", Path.GetFileName(AppPaths.ApiKeyPath));
+            File.WriteAllText(targetKeyPath, protectedTestKey);
+            File.WriteAllText(Path.Combine(target, "ElevenLabsMusicGenerator.ini"), "settings sentinel");
+            File.WriteAllText(Path.Combine(target, "Music", "existing.txt"), "music sentinel");
+            var signature = Path.Combine(AppPaths.AppFolder, "private-update.sig");
+            using (var rsa = new RSACryptoServiceProvider(2048))
+            using (var hash = SHA256.Create())
+            {
+                File.WriteAllText(signature, Convert.ToBase64String(rsa.SignData(File.ReadAllBytes(package), hash)));
+                UpdateService.TestPublicKeyXml = rsa.ToXmlString(false);
+                ProgramUpdater.SuppressRestartForTest = true;
+                try
+                {
+                    ProgramUpdater.ApplyUpdateFromCommandLine(new[]
+                    {
+                        "--apply-update", "--update-url", new Uri(package).AbsoluteUri,
+                        "--signature-url", new Uri(signature).AbsoluteUri,
+                        "--update-version", Program.Version,
+                        "--update-target", target,
+                        "--update-wait-pid", int.MaxValue.ToString()
+                    });
+                }
+                finally
+                {
+                    UpdateService.TestPublicKeyXml = null;
+                    ProgramUpdater.SuppressRestartForTest = false;
+                    rsa.PersistKeyInCsp = false;
+                }
+            }
+            Assert(Hash(Path.Combine(target, "Manual.html")) == Hash(Path.Combine(portable, "Manual.html")), "The signed manual was not installed.");
+            Assert(File.ReadAllText(targetKeyPath) == protectedTestKey, "The update replaced protected user data.");
+            Assert(!File.Exists(Path.Combine(target, "User", "ApiKey.txt")), "The update created a plaintext key.");
+            Assert(File.ReadAllText(Path.Combine(target, "ElevenLabsMusicGenerator.ini")) == "settings sentinel", "The update replaced settings.");
+            Assert(File.ReadAllText(Path.Combine(target, "Music", "existing.txt")) == "music sentinel", "The update replaced music.");
+            Assert(Directory.GetFiles(Path.Combine(target, "User", "Backups"), "Update-before-*.zip").Length == 1, "The rollback archive is missing.");
+            Console.WriteLine("PASS: private signed updater replacement and user-data preservation.");
+            File.Delete(signature);
+            File.Delete(Path.Combine(AppPaths.AppFolder, "update.zip"));
+            File.Delete(Path.Combine(AppPaths.AppFolder, "update.zip.sig"));
+            Directory.Delete(Path.Combine(AppPaths.AppFolder, "stage"), true);
+            Directory.Delete(Path.Combine(AppPaths.AppFolder, "rollback"), true);
+            Directory.Delete(target, true);
+            return 0;
+        }
+
         private static void Run(string name, Action test)
         {
             test();
@@ -87,6 +214,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 DefaultLengthSeconds = 123,
                 DefaultVariations = 4,
                 DefaultInstrumental = true,
+                SaveGeneratedDetails = false,
                 OutputFormat = "mp3_44100_192",
                 ModelId = "music_v2",
                 UpdateCheckFrequency = "Weekly",
@@ -99,6 +227,7 @@ namespace ElevenLabsMusicGenerator.Tests
             Assert(loaded.DefaultLengthSeconds == 123, "Length did not round trip.");
             Assert(loaded.DefaultVariations == 4, "Variations did not round trip.");
             Assert(loaded.DefaultInstrumental, "Instrumental setting did not round trip.");
+            Assert(!loaded.SaveGeneratedDetails, "Detailed output choice did not round trip.");
             Assert(loaded.OutputFormat == "mp3_44100_192", "Format did not round trip.");
             Assert(loaded.ModelId == "music_v2", "Model did not round trip.");
             Assert(loaded.UpdateCheckFrequency == "Weekly", "Update frequency did not round trip.");
@@ -118,14 +247,91 @@ namespace ElevenLabsMusicGenerator.Tests
 
         private static void TestLegacyApiKeyMigration()
         {
-            if (File.Exists(AppPaths.ApiKeyPath)) File.Delete(AppPaths.ApiKeyPath);
+            var protectedPath = AppPaths.ApiKeyPath;
+            if (File.Exists(protectedPath)) File.Delete(protectedPath);
             var legacyPath = Path.Combine(AppPaths.AppFolder, ".env");
-            File.WriteAllText(legacyPath, "ELEVENLABS_API_KEY=test-migrated-key\n", new UTF8Encoding(false));
+            File.WriteAllText(legacyPath, "ELEVENLABS_API_KEY=test-migrated-key\nOTHER_SETTING=keep\n", new UTF8Encoding(false));
             var key = AppPaths.LoadApiKey();
             Assert(key == "test-migrated-key", "Legacy key was not loaded.");
-            Assert(File.Exists(AppPaths.ApiKeyPath), "Legacy key was not copied to the User folder.");
-            Assert(File.ReadAllText(AppPaths.ApiKeyPath).Trim() == "test-migrated-key", "Migrated key contents are wrong.");
+            Assert(File.Exists(protectedPath), "Legacy key was not encrypted in the User folder.");
+            Assert(!File.ReadAllText(protectedPath).Contains(key), "The protected file contains the plaintext key.");
+            Assert(!File.ReadAllText(legacyPath).Contains(key), "The legacy .env still contains the plaintext key.");
+            Assert(File.ReadAllText(legacyPath).Contains("OTHER_SETTING=keep"), "Migration removed unrelated .env settings.");
             File.Delete(legacyPath);
+        }
+
+        private static void TestPlaintextApiKeyMigration()
+        {
+            var plainPath = Path.Combine(AppPaths.UserFolder, "ApiKey.txt");
+            var protectedPath = AppPaths.ApiKeyPath;
+            if (File.Exists(protectedPath)) File.Delete(protectedPath);
+            File.WriteAllText(plainPath, "test-plain-key\n", new UTF8Encoding(false));
+            Assert(AppPaths.LoadApiKey() == "test-plain-key", "The plaintext key did not migrate.");
+            Assert(File.Exists(protectedPath), "Migration did not create an encrypted key file.");
+            Assert(!File.Exists(plainPath), "Migration left a searchable plaintext key file.");
+            Assert(AppPaths.LoadApiKey() == "test-plain-key", "The encrypted key did not reload.");
+        }
+
+        private static void TestProtectedApiKeyRoundTrip()
+        {
+            var plainPath = Path.Combine(AppPaths.UserFolder, "ApiKey.txt");
+            var protectedPath = AppPaths.ApiKeyPath;
+            AppPaths.SaveApiKey("test-protected-key");
+            Assert(File.Exists(protectedPath), "Saving did not create an encrypted key file.");
+            Assert(!File.ReadAllText(protectedPath).Contains("test-protected-key"), "The stored key is searchable plaintext.");
+            Assert(!File.Exists(plainPath), "Saving left a plaintext key file.");
+            Assert(AppPaths.LoadApiKey() == "test-protected-key", "The encrypted key did not round trip.");
+            AppPaths.SaveApiKey(string.Empty);
+            Assert(!File.Exists(protectedPath), "Clearing the key left the encrypted file behind.");
+        }
+
+        private static void TestUnreadableProtectedApiKey()
+        {
+            var protectedPath = AppPaths.ApiKeyPath;
+            File.WriteAllText(protectedPath, "invalid protected data", new UTF8Encoding(false));
+            Assert(AppPaths.LoadApiKey() == string.Empty, "An unreadable key was accepted.");
+            Assert(!string.IsNullOrWhiteSpace(AppPaths.ApiKeyLoadMessage), "An unreadable key has no user-facing explanation.");
+            Assert(File.Exists(protectedPath), "An unreadable key was silently discarded.");
+            AppPaths.SaveApiKey("test-ui-key");
+        }
+
+        private static void TestSharedProtectedKeyMigration()
+        {
+            var sharedPath = Path.Combine(AppPaths.UserFolder, "ApiKey.dat");
+            var scopedPath = AppPaths.ApiKeyPath;
+            if (File.Exists(scopedPath)) File.Delete(scopedPath);
+            File.WriteAllText(sharedPath, ApiKeyProtector.Protect("test-shared-key"), new UTF8Encoding(false));
+            Assert(AppPaths.LoadApiKey() == "test-shared-key", "The old shared protected key did not migrate.");
+            Assert(File.Exists(scopedPath), "The machine-scoped protected key was not created.");
+            Assert(!File.Exists(sharedPath), "The old shared protected key remains after migration.");
+            Assert(AppPaths.LoadApiKey() == "test-shared-key", "The machine-scoped key did not reload.");
+        }
+
+        private static void TestForeignProtectedKeyIsPreserved()
+        {
+            var sharedPath = Path.Combine(AppPaths.UserFolder, "ApiKey.dat");
+            Assert(Path.GetFileName(AppPaths.ApiKeyPath) != "ApiKey.dat", "The protected key is still shared across computers.");
+            File.Delete(AppPaths.ApiKeyPath);
+            File.WriteAllText(sharedPath, "unreadable key from another computer", new UTF8Encoding(false));
+            Assert(AppPaths.LoadApiKey() == string.Empty && AppPaths.ApiKeyLoadMessage.Length > 0, "A foreign key did not prompt for re-entry.");
+            AppPaths.SaveApiKey("test-this-computer-key");
+            Assert(File.Exists(sharedPath), "Saving on this computer removed another computer's key.");
+            Assert(AppPaths.LoadApiKey() == "test-this-computer-key", "The new machine-scoped key did not load.");
+            File.Delete(sharedPath);
+        }
+
+        private static void TestReadableRunStatistics()
+        {
+            var method = typeof(MainForm).GetMethod("RunStatistics", BindingFlags.NonPublic | BindingFlags.Static);
+            var tracks = new[]
+            {
+                new GenerationResult { OutputPath = "first.wav", Elapsed = TimeSpan.FromSeconds(19.4) },
+                new GenerationResult { OutputPath = "second.wav", Elapsed = TimeSpan.FromSeconds(22.6) }
+            };
+            var status = (string)method.Invoke(null, new object[] { tracks, TimeSpan.FromSeconds(42) });
+            Assert(status.Contains("Track times:" + Environment.NewLine + "first.wav:"), "The first track is not on its own line.");
+            Assert(status.Contains(Environment.NewLine + "second.wav:"), "The second track is not on its own line.");
+            Assert(!status.Contains("Credit charge:"), "Unavailable credit information is still in the status log.");
         }
 
         private static void TestOutputNaming()
@@ -142,6 +348,175 @@ namespace ElevenLabsMusicGenerator.Tests
             Assert(paths.Count == 2, "Variation count is wrong.");
             Assert(paths[0].EndsWith("Bright_synth_pop_with_clean_drums_and_bass_v1.wav", StringComparison.Ordinal), "First output name is wrong: " + paths[0]);
             Assert(paths[1].EndsWith("_v2.wav", StringComparison.Ordinal), "Second output suffix is wrong.");
+        }
+
+        private static void TestCompositionPlan()
+        {
+            var plan = new MusicCompositionPlan();
+            plan.Sections.Add(new MusicSection
+            {
+                Name = "Verse 1", Body = "First line\nSecond line", DurationSeconds = 15,
+                PositiveStyles = "warm piano\nfemale vocalist", NegativeStyles = "distortion", ContextAdherence = "high"
+            });
+            plan.Sections.Add(new MusicSection { Name = "Chorus", Body = "A sung refrain", DurationSeconds = 20, PositiveStyles = "full band", ContextAdherence = "medium" });
+            var restored = MusicCompositionPlan.FromJson(plan.ToJson());
+            Assert(restored.TotalSeconds == 35, "Plan duration did not round trip.");
+            Assert(restored.Sections[0].Body == "First line\nSecond line", "Plan lyrics did not round trip.");
+            Assert(restored.Sections[0].PositiveStyles.Contains("female vocalist"), "Plan styles did not round trip.");
+            Assert(plan.ToJson().Contains("[Verse 1]"), "Section heading was not serialized for ElevenLabs.");
+            plan.Sections[0].DurationSeconds = 2;
+            var rejected = false;
+            try { plan.Validate(); } catch (InvalidDataException) { rejected = true; }
+            Assert(rejected, "A too-short section was accepted.");
+        }
+
+        private static void TestDetailsPlanImport()
+        {
+            var details = "{\"song_metadata\":{\"title\":\"Test\"},\"composition_plan\":{\"chunks\":[{\"text\":\"[Verse]\\nSing again\",\"duration_ms\":12500,\"positive_styles\":[\"warm piano\"]}]}}";
+            var plan = MusicCompositionPlan.FromJson(details);
+            Assert(plan.Sections.Count == 1 && plan.Sections[0].Body == "Sing again", "Track details did not restore lyrics.");
+            Assert(plan.Sections[0].DurationMilliseconds == 12500, "Track details lost the section duration.");
+            Assert(plan.Sections[0].PositiveStyles == "warm piano", "Track details lost section styles.");
+            var rejected = false;
+            try { MusicCompositionPlan.FromJson("{\"song_metadata\":{\"title\":\"No plan\"}}"); }
+            catch (InvalidDataException ex) { rejected = ex.Message.Contains("composition plan"); }
+            Assert(rejected, "Metadata without a reusable plan was not explained clearly.");
+        }
+
+        private static void TestFractionalPlanDurations()
+        {
+            var json = "{\"chunks\":[{\"text\":\"[Intro]\\nInstrumental\",\"duration_ms\":3500},{\"text\":\"[Verse]\\nSing\",\"duration_ms\":4750}]}";
+            var plan = MusicCompositionPlan.FromJson(json);
+            Assert(plan.TotalMilliseconds == 8250, "Fractional section durations were rounded.");
+            Assert(plan.ToJson().Contains("\"duration_ms\":4750"), "The exact duration was not preserved for the API.");
+            Assert(plan.TotalSeconds == 9, "Displayed total seconds should round upward.");
+            Assert(new MusicGenerationRequest { Plan = plan }.LengthMilliseconds == 8250, "The request ignored exact plan duration.");
+        }
+
+        private static void TestCompositionPlanRequest()
+        {
+            var plan = new MusicCompositionPlan();
+            plan.Sections.Add(new MusicSection { Name = "Intro", DurationSeconds = 3, PositiveStyles = "solo piano", ContextAdherence = "high" });
+            var folder = Path.Combine(AppPaths.AppFolder, "Plan Output");
+            Directory.CreateDirectory(folder);
+            var request = new MusicGenerationRequest
+            {
+                Plan = plan, Prompt = "not sent with plan", LengthSeconds = 3, Variations = 1,
+                ModelId = "music_v2_5", OutputFormat = "pcm_44100", OutputFolder = folder, BaseName = "PlanMock"
+            };
+            using (var server = new MockHttpServer(new byte[3 * 44100 * 4]))
+            {
+                new ElevenLabsMusicClient("test-key", server.ApiRoot).GenerateOne(request, request.OutputPaths()[0], 1, CancellationToken.None, null);
+                server.Wait();
+                Assert(server.RequestText.Contains("\"composition_plan\""), "Composition plan was not sent.");
+                Assert(!server.RequestText.Contains("\"prompt\":"), "Prompt was sent together with a composition plan.");
+            }
+            Assert(File.Exists(request.PromptPath()), "The source plan was not saved for resume.");
+            Assert(GenerationBatchPlan.Create(request).ExistingCount == 1, "Completed plan generation was not recognized.");
+            plan.Sections[0].PositiveStyles = "trumpet";
+            AssertResumeRejected(request, "Changed composition plan was accepted for resume.");
+        }
+
+        private static void TestCreateCompositionPlanRequest()
+        {
+            var response = "{\"chunks\":[{\"text\":\"[Verse]\\nOne line\",\"duration_ms\":3000,\"positive_styles\":[\"piano\"],\"negative_styles\":[],\"context_adherence\":\"high\"}]}";
+            using (var server = new MockHttpServer(Encoding.UTF8.GetBytes(response)))
+            {
+                var plan = new ElevenLabsMusicClient("test-key", server.ApiRoot).CreateCompositionPlan("gentle piano", 3, "music_v2_5", CancellationToken.None);
+                server.Wait();
+                Assert(plan.Sections.Count == 1 && plan.Sections[0].Name == "Verse", "API plan response was not parsed.");
+                Assert(server.RequestText.Contains("POST /v1/music/plan"), "Plan endpoint was not called.");
+                Assert(server.RequestText.Contains("\"music_length_ms\":3000"), "Plan length was not sent.");
+                Assert(server.RequestText.Contains("\"model_id\":\"music_v2_5\""), "Plan model was not sent.");
+            }
+        }
+
+        private static void TestMusicApiKeyRequest()
+        {
+            var response = "{\"chunks\":[{\"text\":\"[Intro]\\nPiano\",\"duration_ms\":3000,\"positive_styles\":[\"piano\"],\"negative_styles\":[],\"context_adherence\":\"high\"}]}";
+            using (var server = new MockHttpServer(Encoding.UTF8.GetBytes(response)))
+            {
+                var result = new ElevenLabsMusicClient("test-key", server.ApiRoot).TestApiKey();
+                server.Wait();
+                Assert(result.Contains("Music API key accepted"), "The Music API key test did not succeed.");
+                Assert(server.RequestText.Contains("POST /v1/music/plan"), "The key test did not use the Music endpoint.");
+                Assert(server.RequestText.Contains("\"music_length_ms\":3000"), "The key test used the wrong length.");
+                Assert(server.RequestText.Contains("\"model_id\":\"music_v2_5\""), "The key test used the wrong model.");
+            }
+        }
+
+        private static void TestDetailedResponse()
+        {
+            var folder = Path.Combine(AppPaths.AppFolder, "Detailed Output");
+            Directory.CreateDirectory(folder);
+            var request = new MusicGenerationRequest
+            {
+                Prompt = "Piano and a short sung verse", LengthSeconds = 3, Variations = 1,
+                ModelId = "music_v2_5", OutputFormat = "pcm_44100", OutputFolder = folder,
+                BaseName = "Detailed", IncludeDetails = true
+            };
+            var boundary = "mock-music-boundary";
+            var metadata = "{\"composition_plan\":{\"chunks\":[{\"text\":\"[Verse]\\nHello there\\nSing along\",\"duration_ms\":3000}]},\"song_metadata\":{\"title\":\"Test\"}}";
+            var audio = new byte[3 * 44100 * 4];
+            byte[] response;
+            using (var output = new MemoryStream())
+            {
+                WriteAscii(output, "--" + boundary + "\r\nContent-Type: application/json\r\n\r\n" + metadata + "\r\n");
+                WriteAscii(output, "--" + boundary + "\r\nContent-Type: application/octet-stream\r\n\r\n");
+                output.Write(audio, 0, audio.Length);
+                WriteAscii(output, "\r\n--" + boundary + "--\r\n");
+                response = output.ToArray();
+            }
+            using (var server = new MockHttpServer(response, "200 OK", "multipart/mixed; boundary=" + boundary))
+            {
+                var result = new ElevenLabsMusicClient("test-key", server.ApiRoot).GenerateOne(request, request.OutputPaths()[0], 1, CancellationToken.None, null);
+                server.Wait();
+                Assert(server.RequestText.Contains("POST /v1/music/detailed?output_format=pcm_44100"), "Detailed endpoint was not called.");
+                Assert(result.DetailsPath != null && File.ReadAllText(result.DetailsPath).Contains("song_metadata"), "Details JSON was not saved.");
+                var reusablePlan = MusicCompositionPlan.FromJson(File.ReadAllText(result.DetailsPath, Encoding.UTF8));
+                Assert(reusablePlan.Sections.Count == 1 && reusablePlan.Sections[0].Body.Contains("Sing along"), "Saved details cannot be reopened as a composition plan.");
+                Assert(result.LyricsPath != null && File.ReadAllText(result.LyricsPath).Contains("Hello there"), "Generated lyrics were not saved.");
+                var lyricsFolder = Path.Combine(folder, "Lyrics");
+                Assert(result.DetailsPath == Path.Combine(lyricsFolder, "Detailed.details.json") &&
+                    result.LyricsPath == Path.Combine(lyricsFolder, "Detailed.txt"), "Details and lyrics were not given clean names under Lyrics.");
+                Assert(!File.Exists(result.OutputPath + ".details.json") && !File.Exists(result.OutputPath + ".lyrics.txt"), "Details or lyrics cluttered the music folder.");
+                Assert(File.ReadAllBytes(result.OutputPath).Take(4).SequenceEqual(Encoding.ASCII.GetBytes("RIFF")), "Detailed PCM was not wrapped as WAV.");
+                Assert(!File.Exists(result.OutputPath + ".multipart.part"), "Successful detailed response left a large temporary file.");
+            }
+        }
+
+        private static void TestDetailedResponseFormatCollision()
+        {
+            var folder = Path.Combine(AppPaths.AppFolder, "Format Collision Output");
+            Directory.CreateDirectory(folder);
+            var wavPath = Path.Combine(folder, "Song_v1.wav");
+            File.WriteAllBytes(wavPath, new byte[] { 1 });
+            var lyricsFolder = Path.Combine(folder, "Lyrics");
+            Directory.CreateDirectory(lyricsFolder);
+            var originalLyrics = Path.Combine(lyricsFolder, "Song_v1.txt");
+            File.WriteAllText(originalLyrics, "Original WAV lyrics");
+            var request = new MusicGenerationRequest
+            {
+                Prompt = "Song", LengthSeconds = 3, Variations = 2, ModelId = "music_v2_5",
+                OutputFormat = "mp3_44100_128", OutputFolder = folder, BaseName = "Song", IncludeDetails = true
+            };
+            var boundary = "mock-format-collision";
+            var metadata = "{\"composition_plan\":{\"chunks\":[{\"text\":\"[Verse]\\nNew MP3 lyrics\",\"duration_ms\":3000}]}}";
+            var response = Encoding.UTF8.GetBytes("--" + boundary + "\r\nContent-Type: application/json\r\n\r\n" + metadata + "\r\n--" + boundary + "\r\nContent-Type: application/octet-stream\r\n\r\nmp3audio\r\n--" + boundary + "--\r\n");
+            using (var server = new MockHttpServer(response, "200 OK", "multipart/mixed; boundary=" + boundary))
+            {
+                var result = new ElevenLabsMusicClient("test-key", server.ApiRoot).GenerateOne(request, request.OutputPaths()[0], 1, CancellationToken.None, null);
+                server.Wait();
+                Assert(result.LyricsPath == Path.Combine(lyricsFolder, "Song_v1.mp3.txt"), "Cross-format lyrics must retain the format suffix.");
+                Assert(result.DetailsPath == Path.Combine(lyricsFolder, "Song_v1.mp3.details.json"), "Cross-format details must retain the format suffix.");
+                Assert(File.ReadAllText(originalLyrics) == "Original WAV lyrics", "The WAV lyrics were overwritten.");
+            }
+        }
+
+        private static void WriteAscii(Stream output, string value)
+        {
+            var bytes = Encoding.ASCII.GetBytes(value);
+            output.Write(bytes, 0, bytes.Length);
         }
 
         private static void TestMockPcmGeneration()
@@ -372,13 +747,22 @@ namespace ElevenLabsMusicGenerator.Tests
                 var file = form.MainMenuStrip.Items.OfType<ToolStripMenuItem>().First(item => item.Text == "&File");
                 var openOutput = file.DropDownItems.OfType<ToolStripMenuItem>().First(item => item.Text.Contains("Output"));
                 Assert(openOutput.ShortcutKeys == (Keys.Control | Keys.Shift | Keys.O), "Open output folder shortcut changed.");
+                var generateMenu = form.MainMenuStrip.Items.OfType<ToolStripMenuItem>().First(item => item.Text == "&Generate");
+                var planMenu = generateMenu.DropDownItems.OfType<ToolStripMenuItem>().First(item => item.Text == "Edit Composition &Plan...");
+                Assert(planMenu.ShortcutKeys == Keys.None && string.IsNullOrEmpty(planMenu.ShortcutKeyDisplayString), "The plan menu still advertises a redundant shortcut.");
+                var helpMenu = form.MainMenuStrip.Items.OfType<ToolStripMenuItem>().First(item => item.Text == "&Help");
+                var projectMenu = helpMenu.DropDownItems.OfType<ToolStripMenuItem>().FirstOrDefault(item => item.Text == "&Project Page");
+                Assert(projectMenu != null && projectMenu.ShortcutKeys == (Keys.Control | Keys.F1), "Project page shortcut is missing.");
+                Assert(helpMenu.DropDownItems.OfType<ToolStripMenuItem>().Any(item => item.Text == "&Donate"), "Help, Donate is missing.");
+                Assert(helpMenu.DropDownItems.OfType<ToolStripMenuItem>().Any(item => item.Text == "&Usage Analytics"), "Help, Usage Analytics is missing.");
                 var expected = new Dictionary<string, string>
                 {
                     { "&New Prompt", "Ctrl+N" }, { "&Open Prompt...", "Ctrl+O" },
                     { "&Save Prompt", "Ctrl+S" }, { "Save Prompt &As...", "Ctrl+Shift+S" },
                     { "Open Output &Folder", "Ctrl+Shift+O" }, { "&Generate Music", "Ctrl+Enter" },
                     { "&Cancel Generation", "Esc" }, { "&Preferences...", "Ctrl+," },
-                    { "&Check for Updates...", "Shift+F1" }, { "ElevenLabs Music Generator &Help", "F1" }
+                    { "&Check for Updates...", "Shift+F1" }, { "ElevenLabs Music Generator &Help", "F1" },
+                    { "&Project Page", "Ctrl+F1" }
                 };
                 foreach (var item in form.MainMenuStrip.Items.OfType<ToolStripMenuItem>().SelectMany(menu => menu.DropDownItems.OfType<ToolStripMenuItem>()))
                 {
@@ -391,6 +775,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 var buttonShortcuts = new Dictionary<string, string>
                 {
                     { "Generate", "Ctrl+Enter" }, { "&Cancel", "Esc" },
+                    { "Edit &plan...", "Alt+P" },
                     { "Open Output Folder", "Ctrl+Shift+O" }, { "P&references...", "Ctrl+," },
                     { "Help", "F1" }
                 };
@@ -447,6 +832,40 @@ namespace ElevenLabsMusicGenerator.Tests
             }
         }
 
+        private static void TestPlanEditorKeyboardAndDuration()
+        {
+            using (var editor = new PlanEditorForm(null, "", 10, "music_v2_5", AppPaths.AppFolder, ""))
+            {
+                editor.CreateControl();
+                var controls = Descendants(editor).ToList();
+                Assert(controls.OfType<ListBox>().Any(control => control.AccessibleName == "Composition sections"), "The section list has no accessible name.");
+                Assert(controls.OfType<Button>().Any(control => control.Text == "&Open plan or details..."), "The plan editor does not explain that track details can be opened.");
+                var duration = controls.OfType<NumericUpDown>().First(control => control.AccessibleName == "Section duration in seconds");
+                Assert(duration.DecimalPlaces == 3, "Fractional duration editing is unavailable.");
+                var duplicate = controls.Where(control => control is Label || control is Button)
+                    .Select(control => new { control.Text, Key = Mnemonic(control.Text) }).Where(item => item.Key.HasValue)
+                    .GroupBy(item => item.Key.Value).FirstOrDefault(group => group.Count() > 1);
+                Assert(duplicate == null, "The plan editor has a mnemonic clash: " + (duplicate == null ? "" : duplicate.Key.ToString()));
+                duration.Value = 3.5m;
+                var accept = typeof(PlanEditorForm).GetMethod("AcceptPlan", BindingFlags.Instance | BindingFlags.NonPublic);
+                accept.Invoke(editor, null);
+                Assert(editor.Plan != null && editor.Plan.TotalMilliseconds == 3500, "The plan editor rounded a fractional duration.");
+            }
+            using (var preferences = new PreferencesForm(new AppSettings(), 0))
+            {
+                preferences.CreateControl();
+                var controls = Descendants(preferences).ToList();
+                Assert(controls.OfType<CheckBox>().Any(control => control.AccessibleName == "Save generated lyrics and details"), "The details preference is missing.");
+                var format = controls.OfType<ComboBox>().First(control => control.AccessibleName == "Default output format");
+                Assert(format.Items.Cast<string>().Any(value => value == "MP3 48 kHz, 320 kbps"), "The 48 kHz MP3 choice is missing.");
+                var general = controls.OfType<TabPage>().First(control => control.Text == "General");
+                var duplicate = Descendants(general).Where(control => control is Label || control is Button || control is CheckBox)
+                    .Select(control => new { control.Text, Key = Mnemonic(control.Text) }).Where(item => item.Key.HasValue)
+                    .GroupBy(item => item.Key.Value).FirstOrDefault(group => group.Count() > 1);
+                Assert(duplicate == null, "General preferences have a mnemonic clash: " + (duplicate == null ? "" : duplicate.Key.ToString()));
+            }
+        }
+
         private static char? Mnemonic(string text)
         {
             for (var index = 0; index + 1 < text.Length; index++)
@@ -476,9 +895,30 @@ namespace ElevenLabsMusicGenerator.Tests
             {
                 preferences.CreateControl();
                 var controls = Descendants(preferences).ToList();
-                Assert(controls.OfType<TabControl>().Any(control => control.TabPages.Count == 3), "Preferences tabs are missing.");
+                var tabs = controls.OfType<TabControl>().FirstOrDefault(control => control.TabPages.Count == 3);
+                Assert(tabs != null, "Preferences tabs are missing.");
+                Assert(tabs.TabPages.Cast<TabPage>().Select(page => page.Text).SequenceEqual(new[] { "General", "API key", "Updates" }), "Preference tabs expose mnemonic markers as literal text.");
                 Assert(controls.OfType<TextBox>().Any(control => control.AccessibleName == "ElevenLabs API key" && control.UseSystemPasswordChar), "Masked API key control is missing.");
+                Assert(controls.OfType<LinkLabel>().Any(control => control.AccessibleName == "Get an ElevenLabs API key" && control.TabStop), "Focusable API key help link is missing.");
                 Assert(controls.OfType<ComboBox>().Any(control => control.AccessibleName == "Check for updates"), "Update preference is missing.");
+            }
+        }
+
+        private static void TestPreferencesButtonOrder()
+        {
+            using (var preferences = new PreferencesForm(new AppSettings(), 0))
+            {
+                preferences.StartPosition = FormStartPosition.Manual;
+                preferences.Location = new System.Drawing.Point(-2000, -2000);
+                preferences.Show();
+                Application.DoEvents();
+                var buttons = Descendants(preferences).OfType<Button>().ToList();
+                var ok = buttons.First(button => button.Text == "&OK");
+                var cancel = buttons.First(button => button.Text == "&Cancel");
+                Assert(ok.Parent == cancel.Parent, "Preference buttons do not share a layout container.");
+                Assert(ok.Left < cancel.Left, "Preferences visually place Cancel before OK.");
+                Assert(ok.TabIndex < cancel.TabIndex, "Keyboard navigation reaches Cancel before OK.");
+                Assert(preferences.AcceptButton == ok && preferences.CancelButton == cancel, "Enter or Escape targets the wrong preference button.");
             }
         }
 
@@ -496,6 +936,10 @@ namespace ElevenLabsMusicGenerator.Tests
             var html = File.ReadAllText(AppPaths.ManualPath, Encoding.UTF8);
             Assert(html.Contains("<h2 id=\"changelog\">Changelog</h2>"), "The manual does not place a changelog near the top.");
             Assert(html.Contains("<h3>" + Program.Version + " - "), "The current version is missing from the manual changelog.");
+            Assert(html.Contains("Ctrl+F1"), "The project page shortcut is missing from the manual.");
+            Assert(html.Contains("<h2 id=\"credits\">Credits</h2>"), "The manual has no credits section.");
+            foreach (var url in new[] { "https://elevenlabs.io/app/settings/api-keys", "https://elevenlabs.io/app/developers/analytics/usage", "https://onj.me/software", "https://onj.me/donate", "https://github.com/OnjLouis/ElevenLabsMusicGenerator" })
+                Assert(html.Contains(url), "The manual is missing a useful link: " + url);
             var contents = html.IndexOf("<h2 id=\"contents\">", StringComparison.Ordinal);
             var changelog = html.IndexOf("<h2 id=\"changelog\">", StringComparison.Ordinal);
             Assert(contents >= 0 && changelog > contents, "The contents list must lead to the changelog.");
@@ -577,6 +1021,8 @@ namespace ElevenLabsMusicGenerator.Tests
             try { if (Directory.Exists(Path.Combine(AppPaths.AppFolder, "Mock Output"))) Directory.Delete(Path.Combine(AppPaths.AppFolder, "Mock Output"), true); } catch { }
             try { if (Directory.Exists(Path.Combine(AppPaths.AppFolder, "Resume Output"))) Directory.Delete(Path.Combine(AppPaths.AppFolder, "Resume Output"), true); } catch { }
             try { if (Directory.Exists(Path.Combine(AppPaths.AppFolder, "Music"))) Directory.Delete(Path.Combine(AppPaths.AppFolder, "Music"), true); } catch { }
+            try { if (Directory.Exists(Path.Combine(AppPaths.AppFolder, "Plan Output"))) Directory.Delete(Path.Combine(AppPaths.AppFolder, "Plan Output"), true); } catch { }
+            try { if (Directory.Exists(Path.Combine(AppPaths.AppFolder, "Detailed Output"))) Directory.Delete(Path.Combine(AppPaths.AppFolder, "Detailed Output"), true); } catch { }
             try { if (Directory.Exists(Path.Combine(AppPaths.AppFolder, "Signature Test"))) Directory.Delete(Path.Combine(AppPaths.AppFolder, "Signature Test"), true); } catch { }
             try { if (Directory.Exists(Path.Combine(AppPaths.AppFolder, "Valid Signature Test"))) Directory.Delete(Path.Combine(AppPaths.AppFolder, "Valid Signature Test"), true); } catch { }
             try { if (Directory.Exists(Path.Combine(AppPaths.AppFolder, "Unsafe Zip Test"))) Directory.Delete(Path.Combine(AppPaths.AppFolder, "Unsafe Zip Test"), true); } catch { }
@@ -592,14 +1038,16 @@ namespace ElevenLabsMusicGenerator.Tests
             private readonly TcpListener listener;
             private readonly byte[] responseBody;
             private readonly string responseStatus;
+            private readonly string responseContentType;
             private readonly Task serverTask;
             public string ApiRoot { get; private set; }
             public string RequestText { get; private set; }
 
-            public MockHttpServer(byte[] responseBody, string responseStatus = "200 OK")
+            public MockHttpServer(byte[] responseBody, string responseStatus = "200 OK", string responseContentType = "application/octet-stream")
             {
                 this.responseBody = responseBody;
                 this.responseStatus = responseStatus;
+                this.responseContentType = responseContentType;
                 listener = new TcpListener(IPAddress.Loopback, 0);
                 listener.Start();
                 var port = ((IPEndPoint)listener.LocalEndpoint).Port;
@@ -618,6 +1066,8 @@ namespace ElevenLabsMusicGenerator.Tests
                 using (var client = listener.AcceptTcpClient())
                 using (var stream = client.GetStream())
                 {
+                    stream.ReadTimeout = 10000;
+                    stream.WriteTimeout = 10000;
                     var headerBytes = new List<byte>();
                     while (headerBytes.Count < 64 * 1024)
                     {
@@ -628,6 +1078,12 @@ namespace ElevenLabsMusicGenerator.Tests
                         if (count >= 4 && headerBytes[count - 4] == 13 && headerBytes[count - 3] == 10 && headerBytes[count - 2] == 13 && headerBytes[count - 1] == 10) break;
                     }
                     var headers = Encoding.ASCII.GetString(headerBytes.ToArray());
+                    if (headers.IndexOf("\r\nExpect: 100-continue\r\n", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        var acknowledgement = Encoding.ASCII.GetBytes("HTTP/1.1 100 Continue\r\n\r\n");
+                        stream.Write(acknowledgement, 0, acknowledgement.Length);
+                        stream.Flush();
+                    }
                     var contentLength = 0;
                     foreach (var line in headers.Split(new[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries))
                     {
@@ -642,7 +1098,7 @@ namespace ElevenLabsMusicGenerator.Tests
                         offset += count;
                     }
                     RequestText = headers + Encoding.UTF8.GetString(body, 0, offset);
-                    var responseHeaders = Encoding.ASCII.GetBytes("HTTP/1.1 " + responseStatus + "\r\nContent-Type: application/octet-stream\r\nsong-id: mock-song\r\nContent-Length: " + responseBody.Length + "\r\nConnection: close\r\n\r\n");
+                    var responseHeaders = Encoding.ASCII.GetBytes("HTTP/1.1 " + responseStatus + "\r\nContent-Type: " + responseContentType + "\r\nsong-id: mock-song\r\nContent-Length: " + responseBody.Length + "\r\nConnection: close\r\n\r\n");
                     stream.Write(responseHeaders, 0, responseHeaders.Length);
                     stream.Write(responseBody, 0, responseBody.Length);
                     stream.Flush();

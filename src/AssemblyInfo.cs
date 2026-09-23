@@ -7,5 +7,14 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyProduct("ElevenLabs Music Generator")]
 [assembly: AssemblyCopyright("Copyright 2026 Andre Louis")]
 [assembly: ComVisible(false)]
-[assembly: AssemblyVersion("0.9.3.0")]
-[assembly: AssemblyFileVersion("0.9.3.0")]
+[assembly: AssemblyVersion(ElevenLabsMusicGenerator.AppVersion.Full)]
+[assembly: AssemblyFileVersion(ElevenLabsMusicGenerator.AppVersion.Full)]
+
+namespace ElevenLabsMusicGenerator
+{
+    internal static class AppVersion
+    {
+        public const string Short = "1.0.0";
+        public const string Full = Short + ".0";
+    }
+}

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Text;
@@ -42,20 +43,36 @@ namespace ElevenLabsMusicGenerator
 
         public string TestApiKey()
         {
-            var request = CreateRequest(apiRoot + "/v1/user/subscription", "GET");
+            CreateCompositionPlan("A short instrumental piano phrase", 3, "music_v2_5", CancellationToken.None);
+            return "Music API key accepted. No music was generated.";
+        }
+
+        public MusicCompositionPlan CreateCompositionPlan(string prompt, int lengthSeconds, string modelId, CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(prompt) || prompt.Length > 4100) throw new ArgumentException("Enter a prompt of no more than 4,100 characters.", "prompt");
+            if (modelId != "music_v2" && modelId != "music_v2_5") throw new ArgumentException("Composition plans require Music v2 or v2.5.", "modelId");
+            var webRequest = CreateRequest(apiRoot + "/v1/music/plan", "POST");
+            var body = new JavaScriptSerializer().Serialize(new Dictionary<string, object>
+            {
+                { "prompt", prompt.Trim() }, { "music_length_ms", lengthSeconds * 1000 }, { "model_id", modelId }
+            });
+            var bytes = Encoding.UTF8.GetBytes(body);
+            webRequest.ContentType = "application/json";
+            webRequest.ContentLength = bytes.Length;
             try
             {
-                using (var response = (HttpWebResponse)request.GetResponse())
-                using (var reader = new StreamReader(response.GetResponseStream()))
+                using (cancellationToken.Register(delegate { try { webRequest.Abort(); } catch { } }))
                 {
-                    var body = reader.ReadToEnd();
-                    var root = new JavaScriptSerializer().DeserializeObject(body) as Dictionary<string, object>;
-                    object tier;
-                    return root != null && root.TryGetValue("tier", out tier) ? "API key accepted. Subscription tier: " + Convert.ToString(tier) + "." : "API key accepted.";
+                    cancellationToken.ThrowIfCancellationRequested();
+                    using (var output = webRequest.GetRequestStream()) output.Write(bytes, 0, bytes.Length);
+                    using (var response = (HttpWebResponse)webRequest.GetResponse())
+                    using (var reader = new StreamReader(response.GetResponseStream()))
+                        return MusicCompositionPlan.FromJson(reader.ReadToEnd());
                 }
             }
             catch (WebException ex)
             {
+                if (cancellationToken.IsCancellationRequested) throw new OperationCanceledException(cancellationToken);
                 throw CreateApiException(ex);
             }
         }
@@ -74,15 +91,29 @@ namespace ElevenLabsMusicGenerator
             var pcmPartPath = outputPath + ".pcm.part";
             var promptPath = requestData.PromptPath();
             var promptPartPath = promptPath + ".part";
+            var multipartPartPath = outputPath + ".multipart.part";
+            var lyricsFolder = Path.Combine(outputFolder, "Lyrics");
+            var sidecarName = Path.GetFileNameWithoutExtension(outputPath);
+            var otherAudioExtension = string.Equals(Path.GetExtension(outputPath), ".wav", StringComparison.OrdinalIgnoreCase) ? ".mp3" : ".wav";
+            if (File.Exists(Path.ChangeExtension(outputPath, otherAudioExtension))) sidecarName += Path.GetExtension(outputPath);
+            var detailsPath = Path.Combine(lyricsFolder, sidecarName + ".details.json");
+            var lyricsPath = Path.Combine(lyricsFolder, sidecarName + ".txt");
+            var detailsPartPath = detailsPath + ".part";
+            var lyricsPartPath = lyricsPath + ".part";
+            var keepRawResponse = false;
+            var stopwatch = Stopwatch.StartNew();
             DeleteIfExists(audioPartPath);
             DeleteIfExists(pcmPartPath);
             DeleteIfExists(promptPartPath);
+            DeleteIfExists(multipartPartPath);
+            DeleteIfExists(detailsPartPath);
+            DeleteIfExists(lyricsPartPath);
 
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 Report(progress, requestData, variationIndex, outputPath, 0, "Requesting music from ElevenLabs.");
-                var url = apiRoot + "/v1/music?output_format=" + HttpUtility.UrlEncode(requestData.OutputFormat);
+                var url = apiRoot + (requestData.IncludeDetails ? "/v1/music/detailed" : "/v1/music") + "?output_format=" + HttpUtility.UrlEncode(requestData.OutputFormat);
                 var webRequest = CreateRequest(url, "POST");
                 var body = BuildRequestBody(requestData, variationIndex);
                 var bodyBytes = Encoding.UTF8.GetBytes(body);
@@ -96,8 +127,9 @@ namespace ElevenLabsMusicGenerator
                     using (var responseStream = response.GetResponseStream())
                     {
                         var rawTarget = requestData.OutputFormat.StartsWith("pcm_", StringComparison.OrdinalIgnoreCase) ? pcmPartPath : audioPartPath;
+                        var networkTarget = requestData.IncludeDetails ? multipartPartPath : rawTarget;
                         long received = 0;
-                        using (var output = new FileStream(rawTarget, FileMode.Create, FileAccess.Write, FileShare.None))
+                        using (var output = new FileStream(networkTarget, FileMode.Create, FileAccess.Write, FileShare.None))
                         {
                             var buffer = new byte[64 * 1024];
                             while (true)
@@ -112,6 +144,21 @@ namespace ElevenLabsMusicGenerator
                         }
 
                         if (received == 0) throw new InvalidDataException("ElevenLabs returned an empty audio file.");
+                        MultipartMusicResponse details = null;
+                        if (requestData.IncludeDetails)
+                        {
+                            try { details = MultipartMusicResponse.Extract(multipartPartPath, response.ContentType, rawTarget); }
+                            catch (Exception ex)
+                            {
+                                keepRawResponse = true;
+                                throw new InvalidDataException("Could not decode the detailed response. The complete response was retained at " + multipartPartPath + ".", ex);
+                            }
+                            if (details.MetadataJson == null)
+                            {
+                                keepRawResponse = true;
+                                throw new InvalidDataException("ElevenLabs returned audio without detailed metadata. The response was retained at " + multipartPartPath + ".");
+                            }
+                        }
                         if (requestData.OutputFormat.StartsWith("pcm_", StringComparison.OrdinalIgnoreCase))
                         {
                             WaveFileWriter.WrapPcmFile(pcmPartPath, audioPartPath, PcmSampleRate(requestData.OutputFormat));
@@ -119,13 +166,25 @@ namespace ElevenLabsMusicGenerator
                         }
 
                         if (variationIndex == 1)
-                            File.WriteAllText(promptPartPath, requestData.Prompt.TrimEnd() + Environment.NewLine, new UTF8Encoding(false));
+                            File.WriteAllText(promptPartPath, requestData.SourceText() + Environment.NewLine, new UTF8Encoding(false));
+                        if (details != null)
+                        {
+                            Directory.CreateDirectory(lyricsFolder);
+                            File.WriteAllText(detailsPartPath, details.MetadataJson + Environment.NewLine, new UTF8Encoding(false));
+                            if (!string.IsNullOrWhiteSpace(details.LyricsText))
+                                File.WriteAllText(lyricsPartPath, details.LyricsText + Environment.NewLine, new UTF8Encoding(false));
+                        }
+                        if (details != null) ReplaceFile(detailsPartPath, detailsPath);
+                        var hasLyrics = File.Exists(lyricsPartPath);
+                        if (hasLyrics) ReplaceFile(lyricsPartPath, lyricsPath);
                         File.Move(audioPartPath, outputPath);
                         if (variationIndex == 1) ReplaceFile(promptPartPath, promptPath);
                         var songId = response.Headers["song-id"] ?? string.Empty;
-                        AppLog.Write("Generated " + Path.GetFileName(outputPath) + "; variation=" + variationIndex + "; bytes=" + received + "; format=" + requestData.OutputFormat + "; model=" + requestData.ModelId + ".");
+                        stopwatch.Stop();
+                        AppLog.Write("Generated " + Path.GetFileName(outputPath) + "; variation=" + variationIndex + "; bytes=" + received + "; format=" + requestData.OutputFormat + "; model=" + requestData.ModelId + "; elapsed=" + stopwatch.Elapsed.TotalSeconds.ToString("0.0") + "s.");
                         Report(progress, requestData, variationIndex, outputPath, received, variationIndex == 1 ? "Saved generated audio and shared prompt." : "Saved generated audio.");
-                        return new GenerationResult { OutputPath = outputPath, PromptPath = promptPath, AudioBytes = received, SongId = songId };
+                        return new GenerationResult { OutputPath = outputPath, PromptPath = promptPath, AudioBytes = received, SongId = songId,
+                            DetailsPath = details == null ? null : detailsPath, LyricsPath = hasLyrics ? lyricsPath : null, Elapsed = stopwatch.Elapsed };
                     }
                 }
             }
@@ -139,6 +198,9 @@ namespace ElevenLabsMusicGenerator
                 DeleteIfExists(audioPartPath);
                 DeleteIfExists(pcmPartPath);
                 DeleteIfExists(promptPartPath);
+                if (!keepRawResponse) DeleteIfExists(multipartPartPath);
+                DeleteIfExists(detailsPartPath);
+                DeleteIfExists(lyricsPartPath);
             }
         }
 
@@ -149,7 +211,7 @@ namespace ElevenLabsMusicGenerator
             request.Method = method;
             request.Timeout = RequestTimeoutMilliseconds;
             request.ReadWriteTimeout = RequestTimeoutMilliseconds;
-            request.UserAgent = "ElevenLabs Music Generator/0.9";
+            request.UserAgent = "ElevenLabs Music Generator/" + AppVersion.Short;
             request.Accept = "*/*";
             request.Headers["xi-api-key"] = apiKey;
             return request;
@@ -158,11 +220,15 @@ namespace ElevenLabsMusicGenerator
         private static string BuildRequestBody(MusicGenerationRequest requestData, int variationIndex)
         {
             var values = new Dictionary<string, object>();
-            values["prompt"] = requestData.Prompt;
-            values["music_length_ms"] = requestData.LengthSeconds * 1000;
+            if (requestData.Plan == null)
+            {
+                values["prompt"] = requestData.Prompt;
+                values["music_length_ms"] = requestData.LengthSeconds * 1000;
+                values["force_instrumental"] = requestData.Instrumental;
+            }
+            else values["composition_plan"] = requestData.Plan.ToPayload();
             values["model_id"] = requestData.ModelId;
-            values["force_instrumental"] = requestData.Instrumental;
-            if (requestData.Seed.HasValue) values["seed"] = requestData.Seed.Value + variationIndex - 1;
+            if (requestData.Seed.HasValue && requestData.Plan != null) values["seed"] = requestData.Seed.Value + variationIndex - 1;
             return new JavaScriptSerializer().Serialize(values);
         }
 
@@ -181,20 +247,7 @@ namespace ElevenLabsMusicGenerator
                 File.Move(temporaryPath, destinationPath);
                 return;
             }
-            try
-            {
-                File.Replace(temporaryPath, destinationPath, null);
-            }
-            catch (PlatformNotSupportedException)
-            {
-                File.Delete(destinationPath);
-                File.Move(temporaryPath, destinationPath);
-            }
-            catch (IOException)
-            {
-                File.Delete(destinationPath);
-                File.Move(temporaryPath, destinationPath);
-            }
+            File.Replace(temporaryPath, destinationPath, null);
         }
 
         private static ElevenLabsApiException CreateApiException(WebException exception)

@@ -1,0 +1,131 @@
+import Foundation
+import Security
+
+struct AppPreferences: Codable {
+    var outputFolder: String = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Music/ElevenLabs Music Generator", isDirectory: true).path
+    var durationSeconds = 60
+    var variations = 2
+    var instrumental = false
+    var model = MusicModel.v25.rawValue
+    var format = AudioFormat.wav.rawValue
+    var includeDetails = true
+
+    static func load() -> AppPreferences {
+        guard let data = UserDefaults.standard.data(forKey: "preferences"),
+              let decoded = try? JSONDecoder().decode(AppPreferences.self, from: data) else { return AppPreferences() }
+        return decoded
+    }
+
+    func save() {
+        if let data = try? JSONEncoder().encode(self) { UserDefaults.standard.set(data, forKey: "preferences") }
+    }
+}
+
+enum KeychainStore {
+    private static let service = "me.onj.ElevenLabsMusicGeneratorMac"
+    private static let account = "ElevenLabsAPIKey"
+
+    static func read() throws -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess, let data = result as? Data else {
+            throw MusicError.response("Could not read the API key from Keychain (\(status)).")
+        }
+        return String(data: data, encoding: .utf8)
+    }
+
+    static func write(_ key: String) throws {
+        let clean = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { throw MusicError.validation("Enter an API key.") }
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                                    kSecAttrService as String: service, kSecAttrAccount as String: account]
+        let update: [String: Any] = [kSecValueData as String: Data(clean.utf8)]
+        var status = SecItemUpdate(query as CFDictionary, update as CFDictionary)
+        if status == errSecItemNotFound {
+            var item = query
+            item[kSecValueData as String] = Data(clean.utf8)
+            status = SecItemAdd(item as CFDictionary, nil)
+        }
+        guard status == errSecSuccess else { throw MusicError.response("Could not save the API key to Keychain (\(status)).") }
+    }
+
+    static func delete() throws {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                                    kSecAttrService as String: service, kSecAttrAccount as String: account]
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw MusicError.response("Could not remove the API key from Keychain (\(status)).")
+        }
+    }
+}
+
+enum DraftStore {
+    private static var folder: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("ElevenLabs Music Generator", isDirectory: true)
+    }
+
+    static func loadPrompt() -> String {
+        (try? String(contentsOf: folder.appendingPathComponent("Prompt Draft.txt"), encoding: .utf8)) ?? ""
+    }
+
+    static func savePrompt(_ text: String) {
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try? Data(text.utf8).write(to: folder.appendingPathComponent("Prompt Draft.txt"), options: .atomic)
+    }
+
+    static func loadPlan() -> CompositionPlan? {
+        guard let data = try? Data(contentsOf: folder.appendingPathComponent("Composition Draft.json")) else { return nil }
+        return try? JSONDecoder().decode(CompositionPlan.self, from: data)
+    }
+
+    static func savePlan(_ plan: CompositionPlan?) {
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let path = folder.appendingPathComponent("Composition Draft.json")
+        if let plan, let data = try? JSONEncoder().encode(plan) { try? data.write(to: path, options: .atomic) }
+        else { try? FileManager.default.removeItem(at: path) }
+    }
+}
+
+enum BatchPlanner {
+    static func pending(_ request: GenerationRequest) throws -> [Int] {
+        try request.validate()
+        let fm = FileManager.default
+        let existing = (1...request.variations).filter { fm.fileExists(atPath: request.outputURL($0).path) }
+        if !existing.isEmpty {
+            guard let source = try? Data(contentsOf: request.promptURL), source == request.sourceData else {
+                throw MusicError.validation("Existing tracks cannot be resumed because their saved prompt or plan does not match. Choose a new base filename.")
+            }
+            for index in existing {
+                let url = request.outputURL(index)
+                let data = try Data(contentsOf: url, options: .mappedIfSafe)
+                guard matchesAudio(data, request: request) else {
+                    throw MusicError.validation("Existing track \(url.lastPathComponent) does not match the selected format. Choose a new base filename.")
+                }
+            }
+        }
+        return (1...request.variations).filter { !existing.contains($0) }
+    }
+
+    private static func matchesAudio(_ data: Data, request: GenerationRequest) -> Bool {
+        if request.format == .wav {
+            guard data.count >= 44, String(data: data[0..<4], encoding: .ascii) == "RIFF",
+                  String(data: data[8..<12], encoding: .ascii) == "WAVE" else { return false }
+            let rate = data[24..<28].enumerated().reduce(UInt32(0)) { $0 | (UInt32($1.element) << ($1.offset * 8)) }
+            let expected = request.plan?.totalMilliseconds ?? request.durationSeconds * 1000
+            let actual = (data.count - 44) / (44_100 * 4)
+            return rate == 44_100 && abs(actual - expected / 1000) <= 5
+        }
+        guard data.count > 128 else { return false }
+        return data.starts(with: Data("ID3".utf8)) || (data[0] == 0xff && data[1] & 0xe0 == 0xe0)
+    }
+}

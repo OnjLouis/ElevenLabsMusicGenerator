@@ -17,7 +17,7 @@ namespace ElevenLabsMusicGenerator
         public const string ProjectUrl = "https://github.com/OnjLouis/ElevenLabsMusicGenerator";
         private const string UserAgent = "ElevenLabs Music Generator updater";
         private const string PackageName = "ElevenLabsMusicGenerator.zip";
-        private const string PublicKeyXml = "<RSAKeyValue><Modulus>rIXaib48rjZyBk3JgKN11Cm4bCrHHNgfo/XGcVRCwPGI1koYo72/VWbZM4m2P6OW38gjxTIwtFMfziEpZx3byHz+A0BetI+j/condg7EZsGW2fdIeP9rXqH3yPgsX4OJX3UkuGv+Gc4q+Z90+QRWHx7ECjPvwzZDG0/UMDT4Zt0NnKHUIRo3vYBm8O00RW1PQ59Ci7sKK3kJeiEglw+iILpZehTrtYFLWxTs0xVZha8M32PJFxSE+Ysf1/20NtysYkbEnxdSJakKTDC/26kY/EkbZQXf0GmoI8thvwxEGL/YprZ5u1o4f6s6G5+L90lrp4esLuMwtOK9dmMIPcul1WgFBWTZOl7ymp37f+Fmvf5WYJYKGz2nVeHzyxUhNuxP3a2CFiOYOsTvDOO5NKmyKVNUxT5XpWvWQHRKHG/4lX8OwnNHoJ6fUSq33gFkTJ8xx04xX5aCfo08DoA5awZ2x9BMEKusSX7S7bAX5OI0Iuse2iuoTAwIenscXMpqmhfZ</Modulus><Exponent>AQAB</Exponent></RSAKeyValue>";
+        private const string PublicKeyXml = "<RSAKeyValue><Modulus>qAq36snfomNcs9BJHxm5fQyD8q9NHOYlnjozQIo79eacf6zaOE5WXx8iPHPu7LbSuLLVHKWVNpLQqDSn/2SwdBVIpkTeVMmUjvCqfeICVWwuyw1R0kzLtyfrz2Z3tsTa0bXaVITgAsEF9IAbBuCz99jMuaFut4oPjLaJqlyWnmv+2iQxhzS5G6oreWyWK3SHDWhEeu+8dQmgz3cO03XcOcXnPYSbPPBf3EGg4934jNE7e+VtB9bytQn45NIhjQ1CIv2MVuWwEuXA6fxvk3x7w6CgPrsihR521MmBxXhQeoPJzTiMdFQxKKxqtNi2PHqErfpgKKk0Rmz+WeaZUOfQIoPeNiSrWxoQhxorXXEx2Rz3Czgmi/oIIk0UeO3fwD34YN5rDJ4zARTlL4y+xsjtsj8H5y6nF8ZQBZFR/s71n3FrAT/cx93bX8U+h4IEZGYyZ70RJNL3fzOAVz+C/DcanLbzz1zQsfP9eD0H0YbGfc56ib+L57Ky22ZvWJ9+wUB9</Modulus><Exponent>AQAB</Exponent></RSAKeyValue>";
 
         public static void CheckAutomatically(IWin32Window owner, AppSettings settings)
         {
@@ -63,8 +63,15 @@ namespace ElevenLabsMusicGenerator
 
         internal static bool VerifyPackageSignature(string zipPath, string signaturePath)
         {
+#if PRIVATE_TEST
+            if (!string.IsNullOrEmpty(TestPublicKeyXml)) return VerifyPackageSignatureWithKey(zipPath, signaturePath, TestPublicKeyXml);
+#endif
             return VerifyPackageSignatureWithKey(zipPath, signaturePath, PublicKeyXml);
         }
+
+#if PRIVATE_TEST
+        internal static string TestPublicKeyXml;
+#endif
 
         internal static bool VerifyPackageSignatureWithKey(string zipPath, string signaturePath, string publicKeyXml)
         {

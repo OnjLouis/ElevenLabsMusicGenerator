@@ -39,10 +39,10 @@ namespace ElevenLabsMusicGenerator
             }
         }
 
-        public static bool MatchesGeneratedWave(string path, int sampleRate, int durationSeconds)
+        public static bool MatchesGeneratedWave(string path, int sampleRate, int durationMilliseconds)
         {
             const int headerBytes = 44;
-            var expectedDataBytes = (long)sampleRate * Channels * BitsPerSample / 8 * durationSeconds;
+            var expectedDataBytes = (long)sampleRate * Channels * BitsPerSample / 8 * durationMilliseconds / 1000;
             using (var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
             using (var reader = new BinaryReader(input, Encoding.ASCII))
             {

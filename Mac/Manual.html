@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ElevenLabs Music Generator for Mac - Help</title>
+<style>body{font:1rem/1.55 -apple-system,BlinkMacSystemFont,sans-serif;max-width:58rem;margin:2rem auto;padding:0 1rem;color:#202124;background:white}table{border-collapse:collapse;width:100%}th,td{border:1px solid #777;padding:.4rem;text-align:left}code{font-family:ui-monospace,monospace}</style></head><body><main>
+<h1>ElevenLabs Music Generator for Mac</h1>
+<p>A native macOS application for making music with the ElevenLabs Music API.</p>
+<h2 id="contents">Contents</h2><ul>
+<li><a href="#changelog">Changelog</a></li><li><a href="#prerequisites">Prerequisites And API Key</a></li>
+<li><a href="#first-run">First Run</a></li><li><a href="#generating-music">Generating Music</a></li>
+<li><a href="#composition-plans">Composition Plans And Lyrics</a></li>
+<li><a href="#results-and-credits">Results And Credit Usage</a></li>
+<li><a href="#prompt-drafts">Prompt Drafts</a></li>
+<li><a href="#cancellation-and-failure">Cancellation And Failure</a></li>
+<li><a href="#keyboard-commands">Keyboard Commands</a></li>
+<li><a href="#updates">Updates</a></li><li><a href="#files-and-storage">Files and Storage</a></li>
+<li><a href="#credits">Credits</a></li></ul>
+<h2 id="changelog">Changelog</h2><h3>1.0.0 - 23 September 2026</h3>
+<p>Initial Mac release for Apple Silicon and Intel, with prompt and plan generation, Keychain credentials, safe batch resumption, returned lyrics and details, and standard Mac menus.</p>
+<h2 id="prerequisites">Prerequisites And API Key</h2>
+<p>Requires macOS 14 or later, an internet connection, and an ElevenLabs account with Music API access and sufficient credits. Music generation can spend credits.</p>
+<ol><li>Sign in to <a href="https://elevenlabs.io/">ElevenLabs</a>.</li>
+<li>Open <a href="https://elevenlabs.io/app/settings/api-keys">API Keys</a> under Developers. Create a key for this app and enable access to Music. You can set a credit limit as an extra safeguard.</li>
+<li>Copy the key when it is first shown; the full value may not be visible later.</li></ol>
+<p>The key is stored in this Mac user's Keychain, not in the application folder, preferences, a prompt, or a log. Do not include a real key in a bug report or share it with another person. ElevenLabs explains key creation and restrictions in its <a href="https://elevenlabs.io/docs/help-center/technical/how-do-i-authorize-myself-using-an-api-key">API key guide</a>.</p>
+<h2 id="first-run">First Run</h2>
+<ol><li>Open <strong>ElevenLabs Music Generator, Settings</strong>.</li>
+<li>On the API Key tab, paste your key, choose <strong>Save Key</strong>, then <strong>Test Key</strong>. Testing does not generate music or spend credits.</li>
+<li>Before generating, set your preferred <strong>Music folder</strong> on the General tab. Also choose whether to save returned lyrics and details.</li></ol>
+<p>If you leave the folder unchanged, the app saves to <code>~/Music/ElevenLabs Music Generator</code>. The first save creates the selected folder if it does not already exist.</p>
+<h2 id="generating-music">Generating Music</h2>
+<ol><li>Type or paste a prompt in the main window.</li>
+<li>Choose the model, output format, duration, variation count, and whether to force instrumental output.</li>
+<li>Review the suggested Base filename. It updates with the prompt until you edit the name yourself; New Prompt restores automatic naming.</li>
+<li>Use <strong>Generate</strong> or Command-Return. Review the confirmation: it states the number and length of new requests and warns that credits may be spent.</li></ol>
+<p>Prompt mode saves one shared text file containing your input prompt. Variations use suffixes such as <code>_v1</code> and <code>_v2</code>. The shared prompt file is not a transcription of what was sung.</p>
+<p>If a batch stops, Generate checks the saved prompt or plan and existing audio, then offers to make only missing variations. WAV length and format are checked during resumption. MP3 duration cannot be verified automatically, so inspect existing MP3 tracks before confirming. Existing tracks are never overwritten. If a check fails, choose a different Base filename.</p>
+<h2 id="composition-plans">Composition Plans And Lyrics</h2>
+<p>Music v2 and v2.5 can use a section-based plan. Open <strong>Edit Plan</strong> or press Command-P to prepare one even when <strong>Use composition plan</strong> is off. Enable that checkbox when you want generation to use the plan. Each section has a heading, duration in milliseconds, optional lyric lines or musical cues, included/excluded styles, and context adherence. Use <strong>Open Plan or Details</strong> to load a saved plan or a track's details file when it contains a reusable plan. <strong>Export Plan</strong> saves the plan as a JSON file.</p>
+<p><strong>Suggest from Prompt</strong> asks ElevenLabs for a draft plan; review it before generation. Plan mode uses section durations instead of the main Length setting. It follows the plan rather than the plain prompt, and Force instrumental is unavailable. The current plan is restored when you reopen the app.</p>
+<p>A section heading such as <code>Verse</code> is sent with lyric lines as <code>[Verse]</code> followed by your text. You can also enter a short musical direction instead of lyrics. Suggestions are drafts, not a guarantee that every sung word will match. Plan requests are available for Music v2 and v2.5, not v1.</p>
+<h2 id="results-and-credits">Results And Credit Usage</h2>
+<p>The Status log in the main window lists request progress and each completed track on a separate line with its generation time. Completion also displays a notice. The music response does not provide a reliable per-request credit charge, so check <a href="https://elevenlabs.io/app/developers/analytics/usage">ElevenLabs Usage Analytics</a> for actual credit consumption. The same page opens from <strong>Help, Usage Analytics</strong>. A failed or cancelled request may still affect usage.</p>
+<p>When <strong>Save returned lyrics and details</strong> is enabled in Settings, each variation gets a <code>.details.json</code> file in <code>Lyrics</code> with information returned by ElevenLabs. If it contains a composition plan, <strong>Open Plan or Details</strong> loads it for editing and another generation. A details file without a reusable plan cannot be opened as a plan. A text file is saved there only when ElevenLabs returns lyric lines. These are returned lyrics, not a transcript of the recording. Turn this setting off if you only want audio files.</p>
+<p>PCM output is wrapped as 44.1 kHz stereo WAV. MP3 options include 44.1 kHz and 48 kHz; availability depends on your account and the API. If the service rejects a format, the app displays its error. The app does not offer 48 kHz PCM.</p>
+<h2 id="prompt-drafts">Prompt Drafts</h2>
+<p>Command-S saves the current prompt as an ordinary text document; Command-Shift-S chooses a new name. This is independent of the shared prompt file saved during generation. An unsaved prompt draft is recovered from Application Support when you reopen the app.</p>
+<h2 id="cancellation-and-failure">Cancellation And Failure</h2>
+<p>Cancel stops the active request and removes incomplete temporary files. Variations completed before cancellation or a later failure are kept. Existing tracks are never overwritten.</p>
+<h2 id="keyboard-commands">Keyboard Commands</h2><table><thead><tr><th>Command</th><th>Shortcut</th></tr></thead><tbody>
+<tr><td>New prompt</td><td>Command-N</td></tr><tr><td>Open prompt</td><td>Command-O</td></tr><tr><td>Save prompt</td><td>Command-S</td></tr>
+<tr><td>Save prompt as</td><td>Command-Shift-S</td></tr><tr><td>Open Music folder</td><td>Command-Shift-O</td></tr><tr><td>Generate</td><td>Command-Return</td></tr>
+<tr><td>Edit plan</td><td>Command-P</td></tr><tr><td>Settings</td><td>Command-Comma; Escape closes Settings</td></tr>
+<tr><td>Toggle instrumental</td><td>Command-I</td></tr><tr><td>Toggle composition plan</td><td>Command-U</td></tr>
+<tr><td>Focus Model</td><td>Command-Shift-M</td></tr><tr><td>Focus Output Format</td><td>Command-Shift-F</td></tr>
+<tr><td>Manual</td><td>F1</td></tr><tr><td>Check for Updates</td><td>Shift-F1</td></tr>
+<tr><td>Project Page</td><td>Command-F1</td></tr></tbody></table>
+<p>Commands also appear in the standard macOS menus. VoiceOver can reach the prompt editor, settings, plan fields, confirmation, and status using ordinary Mac navigation. Controls provide short VoiceOver hints describing their purpose and relevant shortcuts.</p>
+<h2 id="updates">Updates</h2>
+<p><strong>Check for Updates</strong> is in the application menu. It looks for a newer package matching this Mac's processor and offers the project releases page. The app does not download or install updates automatically. Choose the Apple Silicon ZIP for an M-series Mac or the Intel ZIP for an Intel Mac; check <strong>About This Mac</strong> if unsure. Mac and Windows downloads are separate. Download only from the project's official releases page.</p>
+<p>The project page shortcut opens the <a href="https://github.com/OnjLouis/ElevenLabsMusicGenerator">GitHub project page</a>. The command is also available in the Help menu. More of Andre Louis's applications are listed on the <a href="https://onj.me/software">Software page</a>.</p>
+<h2 id="files-and-storage">Files and Storage</h2>
+<p>Generated audio and one shared prompt or plan file are saved in the selected Music folder. Optional returned lyrics and generation metadata go into its <code>Lyrics</code> subfolder. Settings and prompt or plan drafts live in this user's Application Support folder; the API key remains in Keychain. Keep generated music and account data private when sharing files from the app.</p>
+<h2 id="credits">Credits</h2>
+<p>ElevenLabs Music Generator was developed with Codex under Andre Louis's direction and testing. Music generation is provided by the ElevenLabs Music API and uses the account and credits of the person running the app. The application is free software under the MIT License; the license is included with the download.</p>
+<p>For questions or feedback, visit <a href="https://onj.me/contact">Andre Louis's contact page</a>. To support his work, choose <strong>Donate</strong> from the application or Help menu, or visit <a href="https://onj.me/donate">the donation page</a>.</p>
+</main></body></html>

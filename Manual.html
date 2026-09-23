@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ElevenLabs Music Generator Help</title>
+<title>ElevenLabs Music Generator for Windows - Help</title>
 <style>
 body { font-family: Segoe UI, sans-serif; line-height: 1.55; max-width: 60rem; margin: 2rem auto; padding: 0 1rem; color: #171717; background: #fff; }
 h1, h2 { line-height: 1.2; }
@@ -14,51 +14,44 @@ code { font-family: Consolas, monospace; }
 </head>
 <body>
 <main>
-<h1>ElevenLabs Music Generator</h1>
+<h1>ElevenLabs Music Generator for Windows</h1>
 <p>ElevenLabs Music Generator is a portable Windows application for creating music from a written prompt through the ElevenLabs Music API.</p>
 
 <h2 id="contents">Contents</h2>
 <ul>
 <li><a href="#changelog">Changelog</a></li>
+<li><a href="#prerequisites">Prerequisites And API Key</a></li>
 <li><a href="#first-run">First Run</a></li>
 <li><a href="#generating-music">Generating Music</a></li>
+<li><a href="#composition-plans">Composition Plans And Lyrics</a></li>
+<li><a href="#results-and-credits">Results And Credit Usage</a></li>
 <li><a href="#prompt-drafts">Prompt Drafts</a></li>
 <li><a href="#cancellation-and-failure">Cancellation And Failure</a></li>
 <li><a href="#keyboard-commands">Keyboard Commands</a></li>
 <li><a href="#updates">Updates</a></li>
-<li><a href="#portable-files">Portable Files</a></li>
+<li><a href="#files-and-storage">Files and Storage</a></li>
+<li><a href="#credits">Credits</a></li>
 </ul>
 
 <h2 id="changelog">Changelog</h2>
-<p>These versions are local previews; no public release has been published yet.</p>
-<h3>0.9.3 - 22 September 2026</h3>
+<h3>1.0.0 - 23 September 2026</h3>
 <ul>
-<li>Made the default Music folder portable and moved output-folder selection into Preferences.</li>
-<li>Added safe resumption of missing variations without overwriting completed tracks.</li>
-<li>Improved menu and button shortcut announcements, added Alt+M and Alt+S focus keys, and made manual prompt saves start in the selected music folder.</li>
+<li>Initial Windows release with accessible prompt and composition-plan editing, music generation, and safe batch resumption.</li>
+<li>Includes protected API-key storage, optional returned lyrics and details, and signed update checks.</li>
 </ul>
-<h3>0.9.2 - 22 September 2026</h3>
-<ul>
-<li>Made length and variation values replaceable by typing, and preserved ElevenLabs HTTP error details.</li>
-</ul>
-<h3>0.9.1 - 22 September 2026</h3>
-<ul>
-<li>Saved one shared prompt text file for all variations in a batch.</li>
-</ul>
-<h3>0.9.0 - 22 September 2026</h3>
-<ul>
-<li>Introduced the native portable Windows application, accessible prompt editor, direct ElevenLabs generation, preferences, cancellation, draft recovery, and the signed-update framework.</li>
-</ul>
+
+<h2 id="prerequisites">Prerequisites And API Key</h2>
+<p>You need an ElevenLabs account with Music API access and sufficient credits. Sign in to <a href="https://elevenlabs.io/">ElevenLabs</a> and open <a href="https://elevenlabs.io/app/settings/api-keys">API Keys</a> under Developers. Create a key, enable Music access, and copy the full key when it is first shown. You may set a credit limit for safety. See the <a href="https://elevenlabs.io/docs/help-center/technical/how-do-i-authorize-myself-using-an-api-key">official API key guide</a>. Keep your key private; do not put it in a prompt or bug report.</p>
 
 <h2 id="first-run">First Run</h2>
 <ol>
 <li>Open <strong>Options, Preferences</strong>.</li>
 <li>Select the <strong>API key</strong> tab and enter your ElevenLabs API key.</li>
 <li>Use <strong>Test API key</strong> to verify it without generating music or spending credits.</li>
-<li>On the General tab, choose the default output folder, duration, variations, format, and model.</li>
+<li>Before generating, set your preferred <strong>Default output folder</strong> on the General tab. Also choose the default duration, variations, format, model, and whether to save returned lyrics and details.</li>
 </ol>
-<p>On a new portable installation, the application creates a <code>Music</code> folder beside the executable and uses it by default. This location remains relative when you move the application. A custom output folder can be chosen only in Preferences; existing installations keep their saved choice.</p>
-<p>The key is stored as plain text in <code>User\ApiKey.txt</code> to preserve portability. Keep that file private and do not include the User folder when sharing the application.</p>
+<p>If you leave the folder unchanged, the application creates a <code>Music</code> folder beside the executable. This location moves with the application.</p>
+<p>Your API key is protected for the current Windows account and computer in the application's <code>User</code> folder. Enter the key separately on each computer. Do not share the <code>User</code> folder with anyone else.</p>
 
 <h2 id="generating-music">Generating Music</h2>
 <ol>
@@ -68,15 +61,26 @@ code { font-family: Consolas, monospace; }
 <li>Press <strong>Generate</strong> or <kbd>Ctrl</kbd>+<kbd>Enter</kbd>.</li>
 <li>Review the confirmation carefully. Generation starts only after you confirm that ElevenLabs credits will be spent.</li>
 </ol>
-<p>Each generation saves one text file containing the input prompt. When generating multiple variations, the audio files use suffixes such as <code>_v1</code> and <code>_v2</code>, but they share one unsuffixed prompt file. It does not contain lyrics generated by ElevenLabs.</p>
+<p>Prompt mode saves one shared text file containing your input prompt. Variations use suffixes such as <code>_v1</code> and <code>_v2</code>. The shared prompt file is not a transcription of what was sung.</p>
 <p>When you move into a length or variations field, its current number is selected so that typing replaces it. Review the length and variation count in the confirmation dialog before spending credits.</p>
-<p>If a batch was interrupted, Generate checks the existing tracks and offers to make only missing variations. The saved prompt must match, and existing WAV files must have the expected format and duration. An existing MP3's duration cannot be verified automatically, so review the confirmation carefully. If a check fails, choose a different base filename; existing tracks are never overwritten. Avoid changing the model or instrumental setting while resuming an older batch.</p>
+<p>If a batch was interrupted, Generate checks the existing tracks and offers to make only missing variations. The saved prompt must match, and existing WAV files must have the expected format and duration. An existing MP3's duration cannot be verified automatically, so review the confirmation carefully. If a check fails, choose a different base filename; existing tracks are never overwritten. Keep the same model and instrumental setting when resuming a batch.</p>
+
+<h2 id="composition-plans">Composition Plans And Lyrics</h2>
+<p>For Music v2 or v2.5, choose <strong>Use composition plan</strong>, then open <strong>Edit plan</strong> (<kbd>Alt</kbd>+<kbd>P</kbd>). A plan has ordered sections with a heading, duration, optional lyric lines or short musical directions, included and excluded styles, and context adherence. You can add, remove, or reorder sections. Durations can be entered to three decimal places and total no more than 10 minutes.</p>
+<p>For example, enter <code>Verse</code> as the heading and put lyric lines in its Lyrics and cues field. The section is marked <code>[Verse]</code> when sent to ElevenLabs. For an instrumental section, use a short direction such as <code>{instrumental piano introduction}</code>. These instructions do not guarantee that every sung word will match exactly. Plain prompt mode accepts ordinary descriptive prose and does not require bracketed tags.</p>
+<p><strong>Suggest from prompt</strong> requests a draft plan from ElevenLabs without spending music-generation credits, although the request is rate-limited. Review and edit the proposal before generating. <strong>Open plan or details</strong> loads a saved <code>.plan.json</code> or a track's <code>.details.json</code> if it contains a reusable composition plan. <strong>Export plan</strong> saves a reusable JSON plan. The current plan is recovered from <code>User\Composition draft.json</code>. A generated batch saves one <code>.plan.json</code> beside the tracks for safe resumption.</p>
+<p>Plan mode uses section durations rather than the main Length field, and it disables Force instrumental; put instrumental directions in the relevant sections. The plan takes the place of the plain prompt during generation. The editor is unavailable for Music v1.</p>
+
+<h2 id="results-and-credits">Results And Credit Usage</h2>
+<p>When <strong>Save generated lyrics and details</strong> is enabled in Preferences, each successful track gets its own details file under <code>Lyrics</code>, such as <code>Lyrics\Song_v1.details.json</code>. It records the information returned by ElevenLabs. If that information includes a composition plan, use <strong>Open plan or details</strong> to load and edit it for another generation. A details file without a reusable plan cannot be opened as a plan. If ElevenLabs returns lyric lines, <code>Lyrics\Song_v1.txt</code> is saved for that variation. If WAV and MP3 audio share the same name, these files keep the audio extension to avoid a name collision. Audio and the shared prompt stay in the chosen music folder. These are returned lyrics, not a transcript of the recording. Turn this setting off if you only want audio files.</p>
+<p>The status log shows the elapsed time for the batch and lists each completed track on a separate line. ElevenLabs does not report a reliable credit charge for each request; use <a href="https://elevenlabs.io/app/developers/analytics/usage">ElevenLabs Usage Analytics</a> to check actual consumption. The same page opens from <strong>Help, Usage Analytics</strong>. A failed or cancelled request may still affect usage.</p>
+<p>PCM 44.1 kHz is saved as a WAV file. MP3 choices include 44.1 kHz at 128 or 192 kbps and 48 kHz at 192, 240, or 320 kbps. Actual format availability can depend on the account and API response; the service's error is shown if a requested format is not available.</p>
 
 <h2 id="prompt-drafts">Prompt Drafts</h2>
 <p>The prompt is saved automatically to <code>User\Prompt draft.txt</code> after editing and when the application closes. It is restored on the next launch. The first manual Save Prompt opens the Save dialog in the music output folder selected in Preferences. Later saves update the chosen file; Save As starts in the current music output folder.</p>
 
 <h2 id="cancellation-and-failure">Cancellation And Failure</h2>
-<p>Cancel stops the active request and removes incomplete temporary files. Variations completed before cancellation or a later failure are kept. Output is first written to temporary files beside the destination and moved into place only when complete.</p>
+<p>Cancel stops the active request and removes incomplete temporary files. Variations completed before cancellation or a later failure are kept. A track appears in the chosen folder only when it is complete. If downloaded audio cannot be processed, the data is kept beside the intended output so it is not lost.</p>
 
 <h2 id="keyboard-commands">Keyboard Commands</h2>
 <table>
@@ -89,19 +93,26 @@ code { font-family: Consolas, monospace; }
 <tr><td>Focus music prompt</td><td>Alt+M</td></tr>
 <tr><td>Focus status log</td><td>Alt+S</td></tr>
 <tr><td>Open output folder</td><td>Ctrl+Shift+O</td></tr>
+<tr><td>Edit composition plan</td><td>Alt+P</td></tr>
 <tr><td>Generate music</td><td>Ctrl+Enter</td></tr>
 <tr><td>Cancel generation</td><td>Escape while generating</td></tr>
 <tr><td>Open Preferences</td><td>Ctrl+,</td></tr>
 <tr><td>Check for updates</td><td>Shift+F1</td></tr>
 <tr><td>Open this manual</td><td>F1</td></tr>
+<tr><td>Open project page</td><td>Ctrl+F1</td></tr>
 </tbody>
 </table>
 
 <h2 id="updates">Updates</h2>
-<p>Update checks are available from Help and can be scheduled in Preferences. Automatic checks default to Never. An install requires a ZIP and a valid matching signature; unsigned or invalid packages are not installed. No public update channel exists for this local preview yet.</p>
+<p>Update checks are available from Help and can be scheduled in Preferences. Automatic checks default to Never. An install requires a ZIP and a valid matching signature; unsigned or invalid packages are not installed. Update checks require an internet connection and may report that no release is available.</p>
+<p>Use <strong>Project Page</strong> to open the <a href="https://github.com/OnjLouis/ElevenLabsMusicGenerator">GitHub project page</a> in your browser. More of Andre Louis's applications are listed on the <a href="https://onj.me/software">Software page</a>.</p>
 
-<h2 id="portable-files">Portable Files</h2>
-<p><code>ElevenLabsMusicGenerator.ini</code> contains ordinary preferences. The <code>Music</code> folder is the default output on a new installation. Manually saved prompts and generated audio share the chosen output folder. The <code>User</code> folder contains the API key, prompt draft, and bounded diagnostic logs. Keep both folders private when sharing the application. The program does not use the registry or extract a runtime at startup.</p>
+<h2 id="files-and-storage">Files and Storage</h2>
+<p><code>ElevenLabsMusicGenerator.ini</code> contains preferences. The <code>Music</code> folder is the default output. Generated audio and shared prompts use the chosen output folder; returned details and lyrics use its <code>Lyrics</code> subfolder. The <code>User</code> folder contains the protected API key, prompt and plan drafts, and logs. Keep your music and <code>User</code> folder private when sharing the application.</p>
+
+<h2 id="credits">Credits</h2>
+<p>ElevenLabs Music Generator was developed with Codex under Andre Louis's direction and testing. Music generation is provided by the ElevenLabs Music API and uses the account and credits of the person running the app. The application is free software under the MIT License; <code>LICENSE.txt</code> is included with the download.</p>
+<p>For questions or feedback, visit <a href="https://onj.me/contact">Andre Louis's contact page</a>. To support his work, choose <strong>Help, Donate</strong> or visit <a href="https://onj.me/donate">the donation page</a>.</p>
 </main>
 </body>
 </html>

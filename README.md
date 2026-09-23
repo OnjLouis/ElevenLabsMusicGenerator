@@ -1,28 +1,20 @@
 # ElevenLabs Music Generator
 
-An accessible, portable Windows application for generating music through the ElevenLabs Music API.
+Accessible Windows and Mac applications for generating music through the ElevenLabs Music API. The two platforms have separate downloads and store settings independently.
 
-## Design
+## Getting started
 
-- Standard Windows Forms controls with keyboard and screen-reader support.
-- Direct HTTPS communication with the ElevenLabs REST API.
-- No Python, bundled runtime, registry settings, installation, or startup extraction.
-- Portable settings beside the executable and private changing data under `User`.
-- A relative `Music` folder beside the executable for new installs; custom output folders are selected in Preferences.
-- Manually saved prompts and generated audio use the selected output folder.
-- Atomic audio output, cancellation cleanup, draft recovery, and one shared prompt file per generation batch.
-- Interrupted batches resume only missing variations after checking existing tracks.
+You need an ElevenLabs account with Music API access and sufficient credits. Create an API key in ElevenLabs under Developers, API Keys, and enable Music access. You can set a credit limit for safety. In the app, open Preferences or Settings, save the key, and use Test Key before generating music. Key testing does not generate music.
 
-## Building
+Write a prompt, choose the model, format, duration and number of variations, then review the confirmation before spending credits. Music v2 and v2.5 also support editable composition plans with sections and lyrics. Generated audio, the shared prompt, and optional returned lyrics and details are saved in the chosen Music folder. An interrupted batch can resume missing variations without overwriting completed tracks.
 
-Use Windows PowerShell and provide a new staging directory:
+Saved `.plan.json` files can be reopened. If a generated track's optional `.details.json` contains a composition plan, the same Open Plan or Details command loads it for editing and reuse. Details without a reusable plan remain a record of information returned by ElevenLabs; they are not required for audio playback.
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\Build.ps1 -OutputRoot C:\Path\To\New\Staging
-```
+## Platform downloads
 
-The build uses the C# compiler supplied with .NET Framework and writes all output outside the source tree. Pass an external RSA XML private key through `-SigningKeyPath` to create the signature required by the updater. Private keys must never be stored in the repository, source archive, portable folder, or release package.
+- Windows: download the Windows ZIP, extract it to a folder, and run `ElevenLabsMusicGenerator.exe`. By default, music is saved in a `Music` folder beside the app. Preferences and drafts stay with the portable app; the API key is protected for the current Windows account and computer.
+- Mac: download the Apple Silicon ZIP for an M-series Mac or the Intel ZIP for an Intel Mac, extract the app, and drag it to Applications. The first save uses `~/Music/ElevenLabs Music Generator`. The API key is stored in your Mac Keychain. Check for Updates checks published versions for a matching Mac package and offers the releases page; installation is manual.
 
-## Privacy
+Do not share personal settings, prompts, music, drafts, or API-key files when sharing the application. The app sends your prompt or composition plan to ElevenLabs when you confirm generation.
 
-The API key is stored in `User\ApiKey.txt`. It must never be committed or included in a package. Prompts and generated music are sent to ElevenLabs only when the user confirms generation.
+The [Windows manual](Manual.html) and [Mac manual](Mac/Manual.html) describe the controls, keyboard commands, file locations, recovery, and update behavior for each platform.

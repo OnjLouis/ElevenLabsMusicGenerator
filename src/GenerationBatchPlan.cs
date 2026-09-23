@@ -18,8 +18,8 @@ namespace ElevenLabsMusicGenerator
             if (existing.Count > 0)
             {
                 var promptPath = request.PromptPath();
-                if (!File.Exists(promptPath) || !string.Equals(File.ReadAllText(promptPath, Encoding.UTF8).TrimEnd('\r', '\n'), request.Prompt.TrimEnd(), StringComparison.Ordinal))
-                    throw new InvalidDataException("Existing tracks cannot be resumed because their saved prompt does not match. Choose a new base filename to start a separate batch.");
+                if (!File.Exists(promptPath) || !string.Equals(File.ReadAllText(promptPath, Encoding.UTF8).TrimEnd('\r', '\n'), request.SourceText(), StringComparison.Ordinal))
+                    throw new InvalidDataException("Existing tracks cannot be resumed because their saved prompt or plan does not match. Choose a new base filename to start a separate batch.");
 
                 foreach (var index in existing)
                 {
@@ -41,7 +41,7 @@ namespace ElevenLabsMusicGenerator
                 var parts = request.OutputFormat.Split('_');
                 int sampleRate;
                 return parts.Length == 2 && int.TryParse(parts[1], out sampleRate) &&
-                    WaveFileWriter.MatchesGeneratedWave(path, sampleRate, request.LengthSeconds);
+                    WaveFileWriter.MatchesGeneratedWave(path, sampleRate, request.LengthMilliseconds);
             }
 
             if (!request.OutputFormat.StartsWith("mp3_", StringComparison.OrdinalIgnoreCase)) return false;

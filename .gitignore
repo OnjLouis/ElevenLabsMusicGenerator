@@ -10,3 +10,7 @@
 *.7z
 *.sig
 *.log
+/SmokeTest.ps1
+/Test-ReleasePrivacy.ps1
+/HANDOVER.md
+/GITHUB-RELEASE-RULES.md

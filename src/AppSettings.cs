@@ -12,6 +12,8 @@ namespace ElevenLabsMusicGenerator
         public int DefaultLengthSeconds { get; set; }
         public int DefaultVariations { get; set; }
         public bool DefaultInstrumental { get; set; }
+        public bool UseCompositionPlan { get; set; }
+        public bool SaveGeneratedDetails { get; set; }
         public string OutputFormat { get; set; }
         public string ModelId { get; set; }
         public string UpdateCheckFrequency { get; set; }
@@ -26,6 +28,7 @@ namespace ElevenLabsMusicGenerator
             DefaultLengthSeconds = 60;
             DefaultVariations = 2;
             DefaultInstrumental = false;
+            SaveGeneratedDetails = true;
             OutputFormat = "pcm_44100";
             ModelId = "music_v2_5";
             UpdateCheckFrequency = "Never";
@@ -44,6 +47,8 @@ namespace ElevenLabsMusicGenerator
             settings.DefaultLengthSeconds = ReadInt(ini, "General", "DefaultLengthSeconds", settings.DefaultLengthSeconds, 3, 600);
             settings.DefaultVariations = ReadInt(ini, "General", "DefaultVariations", settings.DefaultVariations, 1, 10);
             settings.DefaultInstrumental = ReadBool(ini, "General", "DefaultInstrumental", settings.DefaultInstrumental);
+            settings.UseCompositionPlan = ReadBool(ini, "General", "UseCompositionPlan", false);
+            settings.SaveGeneratedDetails = ReadBool(ini, "General", "SaveGeneratedDetails", true);
             settings.OutputFormat = NormalizeOutputFormat(ini.Get("General", "OutputFormat", settings.OutputFormat));
             settings.ModelId = NormalizeModel(ini.Get("General", "ModelId", settings.ModelId));
             settings.UpdateCheckFrequency = NormalizeUpdateFrequency(ini.Get("Updates", "CheckFrequency", settings.UpdateCheckFrequency));
@@ -72,6 +77,8 @@ namespace ElevenLabsMusicGenerator
             ini.Set("General", "DefaultLengthSeconds", DefaultLengthSeconds.ToString(CultureInfo.InvariantCulture));
             ini.Set("General", "DefaultVariations", DefaultVariations.ToString(CultureInfo.InvariantCulture));
             ini.Set("General", "DefaultInstrumental", DefaultInstrumental.ToString());
+            ini.Set("General", "UseCompositionPlan", UseCompositionPlan.ToString());
+            ini.Set("General", "SaveGeneratedDetails", SaveGeneratedDetails.ToString());
             ini.Set("General", "OutputFormat", NormalizeOutputFormat(OutputFormat));
             ini.Set("General", "ModelId", NormalizeModel(ModelId));
             ini.Set("Updates", "CheckFrequency", NormalizeUpdateFrequency(UpdateCheckFrequency));
@@ -91,7 +98,8 @@ namespace ElevenLabsMusicGenerator
         public static string NormalizeOutputFormat(string value)
         {
             var candidate = (value ?? string.Empty).Trim().ToLowerInvariant();
-            if (candidate == "mp3_44100_192" || candidate == "mp3_44100_128" || candidate == "pcm_44100") return candidate;
+            if (candidate == "mp3_44100_192" || candidate == "mp3_44100_128" || candidate == "pcm_44100" ||
+                candidate == "mp3_48000_192" || candidate == "mp3_48000_240" || candidate == "mp3_48000_320") return candidate;
             return "pcm_44100";
         }
 

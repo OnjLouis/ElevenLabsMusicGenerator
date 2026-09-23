@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Threading.Tasks;
@@ -14,6 +15,7 @@ namespace ElevenLabsMusicGenerator
         private readonly NumericUpDown lengthNumeric;
         private readonly NumericUpDown variationsNumeric;
         private readonly CheckBox instrumentalCheckBox;
+        private readonly CheckBox detailsCheckBox;
         private readonly ComboBox formatComboBox;
         private readonly ComboBox modelComboBox;
         private readonly TextBox apiKeyTextBox;
@@ -37,9 +39,9 @@ namespace ElevenLabsMusicGenerator
             AccessibleName = "ElevenLabs Music Generator preferences";
 
             tabs = new TabControl { Dock = DockStyle.Fill, AccessibleName = "Preference categories" };
-            var generalPage = new TabPage("&General");
-            var apiPage = new TabPage("&API key");
-            var updatesPage = new TabPage("&Updates");
+            var generalPage = new TabPage("General");
+            var apiPage = new TabPage("API key");
+            var updatesPage = new TabPage("Updates");
             tabs.TabPages.Add(generalPage);
             tabs.TabPages.Add(apiPage);
             tabs.TabPages.Add(updatesPage);
@@ -60,11 +62,13 @@ namespace ElevenLabsMusicGenerator
             NumericFieldBehavior.SelectCurrentValueOnFocus(lengthNumeric);
             NumericFieldBehavior.SelectCurrentValueOnFocus(variationsNumeric);
             instrumentalCheckBox = new CheckBox { Text = "Default to &instrumental music", AutoSize = true, AccessibleName = "Default to instrumental music" };
-            formatComboBox = NewDropDown("Default output format", new[] { "PCM 44.1 kHz WAV", "MP3 44.1 kHz, 192 kbps", "MP3 44.1 kHz, 128 kbps" });
+            detailsCheckBox = new CheckBox { Text = "Save &generated lyrics and details", AutoSize = true, AccessibleName = "Save generated lyrics and details" };
+            formatComboBox = NewDropDown("Default output format", new[] { "PCM 44.1 kHz WAV", "MP3 44.1 kHz, 192 kbps", "MP3 44.1 kHz, 128 kbps", "MP3 48 kHz, 192 kbps", "MP3 48 kHz, 240 kbps", "MP3 48 kHz, 320 kbps" });
             modelComboBox = NewDropDown("Default music model", new[] { "Music v2.5", "Music v2", "Music v1" });
             AddLabeledControl(general, "Default &length in seconds:", lengthNumeric);
             AddLabeledControl(general, "Default &variations:", variationsNumeric);
             AddFullWidthControl(general, instrumentalCheckBox);
+            AddFullWidthControl(general, detailsCheckBox);
             AddLabeledControl(general, "Output &format:", formatComboBox);
             AddLabeledControl(general, "Music &model:", modelComboBox);
             generalPage.Controls.Add(general);
@@ -76,10 +80,23 @@ namespace ElevenLabsMusicGenerator
             showKeyCheckBox.CheckedChanged += delegate { apiKeyTextBox.UseSystemPasswordChar = !showKeyCheckBox.Checked; };
             testKeyButton = NewButton("&Test API key", "Test the API key without spending credits");
             testKeyButton.Click += TestKeyButtonClick;
+            var getKeyLink = new LinkLabel
+            {
+                AutoSize = true,
+                Text = "Get an ElevenLabs API key",
+                AccessibleName = "Get an ElevenLabs API key",
+                TabStop = true
+            };
+            getKeyLink.LinkClicked += delegate
+            {
+                try { Process.Start("https://elevenlabs.io/app/settings/api-keys"); }
+                catch (Exception ex) { SetApiStatus("Could not open the API key page: " + ex.Message); }
+            };
             apiStatusLabel = new AccessibleStatusLabel { AutoSize = true, MaximumSize = new Size(610, 0), Text = "Testing the key does not generate music or spend credits.", AccessibleName = "API key status" };
             AddLabeledControl(api, "API &key:", apiKeyTextBox);
             AddFullWidthControl(api, showKeyCheckBox);
             AddFullWidthControl(api, testKeyButton);
+            AddFullWidthControl(api, getKeyLink);
             AddFullWidthControl(api, apiStatusLabel);
             apiPage.Controls.Add(api);
 
@@ -100,8 +117,10 @@ namespace ElevenLabsMusicGenerator
             var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(8) };
             var cancelButton = NewButton("&Cancel", "Cancel preference changes");
             cancelButton.DialogResult = DialogResult.Cancel;
+            cancelButton.TabIndex = 1;
             var okButton = NewButton("&OK", "Save preferences");
             okButton.Click += OkButtonClick;
+            okButton.TabIndex = 0;
             buttons.Controls.Add(cancelButton);
             buttons.Controls.Add(okButton);
 
@@ -128,9 +147,11 @@ namespace ElevenLabsMusicGenerator
             lengthNumeric.Value = settings.DefaultLengthSeconds;
             variationsNumeric.Value = settings.DefaultVariations;
             instrumentalCheckBox.Checked = settings.DefaultInstrumental;
+            detailsCheckBox.Checked = settings.SaveGeneratedDetails;
             formatComboBox.SelectedItem = FormatDisplay(settings.OutputFormat);
             modelComboBox.SelectedItem = ModelDisplay(settings.ModelId);
             apiKeyTextBox.Text = AppPaths.LoadApiKey();
+            if (AppPaths.ApiKeyLoadMessage.Length > 0) SetApiStatus(AppPaths.ApiKeyLoadMessage);
             updateFrequencyComboBox.SelectedItem = settings.UpdateCheckFrequency == "Startup" ? "At startup" : settings.UpdateCheckFrequency;
             silentUpdatesCheckBox.Checked = settings.InstallUpdatesSilently;
         }
@@ -158,13 +179,24 @@ namespace ElevenLabsMusicGenerator
             settings.DefaultLengthSeconds = Convert.ToInt32(lengthNumeric.Value);
             settings.DefaultVariations = Convert.ToInt32(variationsNumeric.Value);
             settings.DefaultInstrumental = instrumentalCheckBox.Checked;
+            settings.SaveGeneratedDetails = detailsCheckBox.Checked;
             settings.OutputFormat = StoredFormat(Convert.ToString(formatComboBox.SelectedItem));
             settings.ModelId = StoredModel(Convert.ToString(modelComboBox.SelectedItem));
             settings.UpdateCheckFrequency = AppSettings.NormalizeUpdateFrequency(Convert.ToString(updateFrequencyComboBox.SelectedItem).Replace("At startup", "Startup"));
             settings.InstallUpdatesSilently = silentUpdatesCheckBox.Checked;
             settings.LastPreferencesTab = tabs.SelectedIndex;
-            AppPaths.SaveApiKey(apiKeyTextBox.Text);
-            settings.Save();
+            try
+            {
+                AppPaths.SaveApiKey(apiKeyTextBox.Text);
+                settings.Save();
+            }
+            catch (Exception ex)
+            {
+                tabs.SelectedIndex = 1;
+                SetApiStatus("Preferences could not be saved: " + ex.Message);
+                apiKeyTextBox.Focus();
+                return;
+            }
             DialogResult = DialogResult.OK;
             Close();
         }
@@ -174,27 +206,32 @@ namespace ElevenLabsMusicGenerator
             var key = apiKeyTextBox.Text.Trim();
             if (key.Length == 0)
             {
-                apiStatusLabel.Text = "Enter an API key before testing it.";
+                SetApiStatus("Enter an API key before testing it.");
                 apiKeyTextBox.Focus();
                 return;
             }
             testKeyButton.Enabled = false;
-            apiStatusLabel.Text = "Testing API key...";
+            SetApiStatus("Testing API key...");
             try
             {
                 var result = await Task.Run(delegate { return new ElevenLabsMusicClient(key).TestApiKey(); });
-                apiStatusLabel.Text = result;
-                apiStatusLabel.NotifyNameChanged();
+                SetApiStatus(result);
             }
             catch (Exception ex)
             {
-                apiStatusLabel.Text = "API key test failed: " + ex.Message;
-                apiStatusLabel.NotifyNameChanged();
+                SetApiStatus("API key test failed: " + ex.Message);
             }
             finally
             {
                 testKeyButton.Enabled = true;
             }
+        }
+
+        private void SetApiStatus(string message)
+        {
+            apiStatusLabel.Text = message;
+            apiStatusLabel.AccessibleName = "API key status: " + message;
+            apiStatusLabel.NotifyNameChanged();
         }
 
         private void BrowseForOutputFolder()
@@ -261,11 +298,20 @@ namespace ElevenLabsMusicGenerator
         {
             if (value == "mp3_44100_192") return "MP3 44.1 kHz, 192 kbps";
             if (value == "mp3_44100_128") return "MP3 44.1 kHz, 128 kbps";
+            if (value == "mp3_48000_192") return "MP3 48 kHz, 192 kbps";
+            if (value == "mp3_48000_240") return "MP3 48 kHz, 240 kbps";
+            if (value == "mp3_48000_320") return "MP3 48 kHz, 320 kbps";
             return "PCM 44.1 kHz WAV";
         }
 
         private static string StoredFormat(string value)
         {
+            if (value != null && value.Contains("48 kHz"))
+            {
+                if (value.Contains("320")) return "mp3_48000_320";
+                if (value.Contains("240")) return "mp3_48000_240";
+                return "mp3_48000_192";
+            }
             if (value != null && value.Contains("192")) return "mp3_44100_192";
             if (value != null && value.Contains("128")) return "mp3_44100_128";
             return "pcm_44100";
