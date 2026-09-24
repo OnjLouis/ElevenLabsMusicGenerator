@@ -1,6 +1,6 @@
 # ElevenLabs Music Generator
 
-Accessible Windows and Mac applications for generating music through the ElevenLabs Music API. The two platforms have separate downloads and store settings independently.
+Accessible Windows and Mac applications for generating music and sound effects through ElevenLabs. The two platforms have separate downloads and store settings independently.
 
 ## Getting started
 
@@ -11,6 +11,8 @@ Write a prompt, choose the model, format, duration and number of variations, the
 Saved `.plan.json` files can be reopened. If a generated track's optional `.details.json` contains a composition plan, the same Open Plan or Details command loads it for editing and reuse. Details without a reusable plan remain a record of information returned by ElevenLabs; they are not required for audio playback.
 
 ## Platform downloads
+
+Choose Sound Effects v2 in the model selector to generate effects instead of music. Enable Sound Effects access on your API key. Effects support automatic or fixed duration (0.5 to 30 seconds), looping, and prompt influence. Generated effects use the same output folder, with a reusable `.sfx.json` prompt that you can reload with Open Prompt. Music plans and lyrics do not apply to effects.
 
 - Windows: download the Windows ZIP, extract it to a folder, and run `ElevenLabsMusicGenerator.exe`. By default, music is saved in a `Music` folder beside the app. Preferences and drafts stay with the portable app; the API key is protected for the current Windows account and computer.
 - Mac: download the Apple Silicon ZIP for an M-series Mac or the Intel ZIP for an Intel Mac, extract the app, and drag it to Applications. The first save uses `~/Music/ElevenLabs Music Generator`. The API key is stored in your Mac Keychain. Check for Updates checks published versions for a matching Mac package and offers the releases page; installation is manual.

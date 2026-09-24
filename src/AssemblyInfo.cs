@@ -2,7 +2,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 
 [assembly: AssemblyTitle("ElevenLabs Music Generator")]
-[assembly: AssemblyDescription("Accessible portable Windows utility for ElevenLabs music generation")]
+[assembly: AssemblyDescription("Accessible portable Windows utility for ElevenLabs music and sound effects generation")]
 [assembly: AssemblyCompany("Andre Louis")]
 [assembly: AssemblyProduct("ElevenLabs Music Generator")]
 [assembly: AssemblyCopyright("Copyright 2026 Andre Louis")]
@@ -14,7 +14,7 @@ namespace ElevenLabsMusicGenerator
 {
     internal static class AppVersion
     {
-        public const string Short = "1.0.0";
+        public const string Short = "1.1.0";
         public const string Full = Short + ".0";
     }
 }

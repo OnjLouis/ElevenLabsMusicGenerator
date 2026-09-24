@@ -13,7 +13,7 @@ struct MainView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("ElevenLabs Music Generator").font(.title2.weight(.semibold))
+                Text("ElevenLabs Music and Sound FX Generator").font(.title2.weight(.semibold))
                 Spacer()
                 Button("Open Music Folder") { model.openOutputFolder() }
                     .accessibilityHint("Opens the folder where new tracks and prompts are saved. Command-Shift-O.")
@@ -30,12 +30,15 @@ struct MainView: View {
                 .frame(height: 100)
             Text("Prompt").font(.headline)
             KeyboardTextView(text: $model.prompt, editable: true,
-                accessibilityLabel: "Music prompt",
-                accessibilityHelp: "Type or paste a music description.",
+                accessibilityLabel: model.isSoundEffect ? "Sound effects prompt" : "Music prompt",
+                accessibilityHelp: model.isSoundEffect ? "Type or paste a sound effect description." : "Type or paste a music description.",
                 onTab: { focus = .baseName },
                 onBackTab: { focusTextView(statusView) },
                 onReady: { promptView = $0 })
                 .frame(minHeight: 160)
+            Text("\(model.prompt.count) of \(model.isSoundEffect ? GenerationRequest.soundEffectsPromptLimit : 4100) characters")
+                .font(.caption)
+                .accessibilityLabel("Prompt character count: \(model.prompt.count) of \(model.isSoundEffect ? GenerationRequest.soundEffectsPromptLimit : 4100)")
             HStack(spacing: 16) {
                 VStack(alignment: .leading) {
                     Text("Base filename")
@@ -47,11 +50,19 @@ struct MainView: View {
                 }
                 VStack(alignment: .leading) {
                     Text("Length, seconds")
+                    if model.isSoundEffect {
+                        TextField("Length", value: $model.preferences.effects.duration, format: .number)
+                            .frame(width: 110)
+                            .disabled(model.preferences.effects.automaticDuration || model.isBusy)
+                            .accessibilityLabel("Sound effect length in seconds")
+                            .accessibilityHint("Choose from 0.5 to 30 seconds. Unavailable with automatic duration.")
+                    } else {
                     TextField("Length", value: $model.preferences.durationSeconds, format: .number)
                         .frame(width: 110)
                         .disabled(model.planEnabled)
                         .accessibilityLabel("Length in seconds")
                         .accessibilityHint("Length of each variation. A composition plan supplies its own section lengths.")
+                    }
                 }
                 VStack(alignment: .leading) {
                     Text("Variations")
@@ -61,6 +72,19 @@ struct MainView: View {
                         .accessibilityHint("Number of tracks to generate from this prompt.")
                 }
             }
+            if model.isSoundEffect {
+                HStack(spacing: 20) {
+                    Toggle("Automatic duration", isOn: $model.preferences.effects.automaticDuration)
+                        .accessibilityHint("Let ElevenLabs choose a suitable length, up to 30 seconds.")
+                    Toggle("Loop", isOn: $model.preferences.effects.loop)
+                        .accessibilityHint("Generate a sound effect that loops smoothly.")
+                    Text("Prompt influence")
+                    TextField("Prompt influence", value: $model.preferences.effects.promptInfluence, format: .number)
+                        .frame(width: 70)
+                        .accessibilityLabel("Prompt influence")
+                        .accessibilityHint("Zero to one. Higher values follow the prompt more closely.")
+                }.disabled(model.isBusy)
+            } else {
             HStack(spacing: 20) {
                 Toggle("Instrumental", isOn: $model.preferences.instrumental)
                     .disabled(model.planEnabled)
@@ -72,18 +96,20 @@ struct MainView: View {
                     .disabled(model.isBusy)
                     .accessibilityHint("Edit sections and lyrics, even when plan mode is off. Command-P.")
             }
+            }
             HStack(spacing: 16) {
                 Picker("Model", selection: $model.preferences.model) {
                     ForEach(MusicModel.allCases) { item in Text(item.title).tag(item.rawValue) }
                 }
                 .focused($focus, equals: .model)
-                .accessibilityHint("Choose the Music model. Command-Shift-M.")
+                .accessibilityHint("Choose a Music model or Sound Effects. Command-Shift-M.")
                 Picker("Output format", selection: $model.preferences.format) {
-                    ForEach(AudioFormat.allCases) { item in Text(item.title).tag(item.rawValue) }
+                    ForEach(AudioFormat.allCases.filter { !model.isSoundEffect || $0 == .wav || $0 == .mp3_44100_128 || $0 == .mp3_44100_192 }) { item in Text(item.title).tag(item.rawValue) }
                 }
                 .focused($focus, equals: .outputFormat)
                 .accessibilityHint("Choose the audio format. Command-Shift-F.")
             }
+            .disabled(model.isBusy)
             Text("Saving to: \(model.outputURL.path)")
                 .font(.callout).foregroundStyle(.secondary)
                 .lineLimit(2).textSelection(.enabled)
@@ -93,7 +119,7 @@ struct MainView: View {
                 Button("Generate") { model.prepareGeneration() }
                     .keyboardShortcut(.return, modifiers: .command)
                     .disabled(model.isBusy)
-                    .help("Generate music, Command-Return")
+                    .help("Generate audio, Command-Return")
                     .accessibilityHint("Reviews the request before sending it to ElevenLabs. New generations can spend credits. Command-Return.")
                 Button("Cancel") { model.cancelGeneration() }
                     .disabled(!model.isBusy)
@@ -105,17 +131,21 @@ struct MainView: View {
         }
         .padding(20)
         .sheet(isPresented: $model.showPlanEditor) { PlanEditorView(model: model) }
-        .alert("Generate Music?", isPresented: $model.showConfirmation) {
+        .alert(model.isSoundEffect ? "Generate Sound Effects?" : "Generate Music?", isPresented: $model.showConfirmation) {
             Button("Generate") { model.beginGeneration() }
-                .accessibilityHint("Send the confirmed music request to ElevenLabs. Credits may be spent.")
+                .accessibilityHint("Send the confirmed request to ElevenLabs. Credits may be spent.")
             Button("Cancel", role: .cancel) {}
-                .accessibilityHint("Return without requesting music or spending credits.")
+                .accessibilityHint("Return without generating audio or spending credits.")
         } message: { Text(model.confirmationText) }
         .alert(item: $model.notice) { item in
             Alert(title: Text(item.title), message: Text(item.message), dismissButton: .default(Text("OK")))
         }
         .onChange(of: model.preferences.model) { _, value in
             if value == MusicModel.v1.rawValue { model.planEnabled = false }
+            if value == MusicModel.soundEffects.rawValue && model.preferences.format.hasPrefix("mp3_48000") {
+                model.preferences.format = AudioFormat.mp3_44100_192.rawValue
+                model.addStatus("Sound Effects selected. Output changed to MP3 44.1 kHz, 192 kbps.")
+            }
         }
         .onChange(of: model.focusRequest) { _, request in
             guard let request else { return }

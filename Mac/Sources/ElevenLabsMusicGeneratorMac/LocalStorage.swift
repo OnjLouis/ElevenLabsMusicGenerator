@@ -10,6 +10,11 @@ struct AppPreferences: Codable {
     var model = MusicModel.v25.rawValue
     var format = AudioFormat.wav.rawValue
     var includeDetails = true
+    var soundEffects: SoundEffectOptions?
+    var effects: SoundEffectOptions {
+        get { soundEffects ?? SoundEffectOptions() }
+        set { soundEffects = newValue }
+    }
 
     static func load() -> AppPreferences {
         guard let data = UserDefaults.standard.data(forKey: "preferences"),
@@ -121,7 +126,8 @@ enum BatchPlanner {
             guard data.count >= 44, String(data: data[0..<4], encoding: .ascii) == "RIFF",
                   String(data: data[8..<12], encoding: .ascii) == "WAVE" else { return false }
             let rate = data[24..<28].enumerated().reduce(UInt32(0)) { $0 | (UInt32($1.element) << ($1.offset * 8)) }
-            let expected = request.plan?.totalMilliseconds ?? request.durationSeconds * 1000
+            if request.isSoundEffect && request.effects.automaticDuration { return rate == 44_100 && data.count > 44 && (data.count - 44).isMultiple(of: 4) }
+            let expected = request.isSoundEffect ? Int(request.effects.duration * 1000) : request.plan?.totalMilliseconds ?? request.durationSeconds * 1000
             let actual = (data.count - 44) / (44_100 * 4)
             return rate == 44_100 && abs(actual - expected / 1000) <= 5
         }

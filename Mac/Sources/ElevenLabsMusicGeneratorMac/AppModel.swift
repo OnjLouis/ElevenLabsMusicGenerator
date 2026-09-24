@@ -73,6 +73,8 @@ final class AppModel: ObservableObject {
     var baseName: String { filename.value }
     var selectedModel: MusicModel { MusicModel(rawValue: preferences.model) ?? .v25 }
     var selectedFormat: AudioFormat { AudioFormat(rawValue: preferences.format) ?? .wav }
+    var isSoundEffect: Bool { selectedModel == .soundEffects }
+    var usesPlan: Bool { !isSoundEffect && planEnabled }
 
     func focus(_ control: MainControlFocus) {
         focusRequest = MainFocusRequest(control: control)
@@ -99,13 +101,23 @@ final class AppModel: ObservableObject {
 
     func openPrompt() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.plainText]
+        panel.allowedContentTypes = [.plainText, .json]
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
-            prompt = try String(contentsOf: url, encoding: .utf8)
-            filename.openedDocument(named: url.deletingPathExtension().lastPathComponent)
-            promptDocument = url
+            if url.lastPathComponent.lowercased().hasSuffix(".sfx.json") {
+                let saved = try GenerationRequest.readSoundEffect(Data(contentsOf: url))
+                preferences.model = MusicModel.soundEffects.rawValue
+                preferences.effects = saved.effects
+                preferences.format = saved.format.rawValue
+                prompt = saved.prompt
+                filename.openedDocument(named: String(url.lastPathComponent.dropLast(9)))
+                promptDocument = nil
+            } else {
+                prompt = try String(contentsOf: url, encoding: .utf8)
+                filename.openedDocument(named: url.deletingPathExtension().lastPathComponent)
+                promptDocument = url
+            }
             addStatus("Opened \(url.lastPathComponent).")
         } catch { show(error) }
     }
@@ -146,7 +158,7 @@ final class AppModel: ObservableObject {
 
     func editPlan() {
         guard !isBusy else { return }
-        guard selectedModel != .v1 else {
+        guard selectedModel == .v2 || selectedModel == .v25 else {
             show(MusicError.validation("Composition plans require Music v2 or v2.5."))
             return
         }
@@ -172,7 +184,7 @@ final class AppModel: ObservableObject {
         guard !isBusy else { return }
         let clean = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty, clean.count <= 4100 else { show(MusicError.validation("Enter a prompt of no more than 4,100 characters.")); return }
-        guard selectedModel != .v1 else { show(MusicError.validation("Choose Music v2 or v2.5 for a plan.")); return }
+        guard selectedModel == .v2 || selectedModel == .v25 else { show(MusicError.validation("Choose Music v2 or v2.5 for a plan.")); return }
         isBusy = true
         addStatus("Requesting a composition plan.")
         Task {
@@ -193,8 +205,8 @@ final class AppModel: ObservableObject {
             let request = GenerationRequest(prompt: prompt, baseName: baseName, outputFolder: outputURL,
                 durationSeconds: preferences.durationSeconds, variations: preferences.variations,
                 instrumental: preferences.instrumental, model: selectedModel, format: selectedFormat,
-                includeDetails: preferences.includeDetails, plan: planEnabled ? plan : nil)
-            if planEnabled && plan == nil { throw MusicError.validation("Create or open a composition plan first.") }
+                includeDetails: !isSoundEffect && preferences.includeDetails, plan: usesPlan ? plan : nil, effects: preferences.effects)
+            if usesPlan && plan == nil { throw MusicError.validation("Create or open a composition plan first.") }
             let indices = try BatchPlanner.pending(request)
             guard !indices.isEmpty else {
                 addStatus("All requested variations already exist. Nothing to generate.")
@@ -210,8 +222,8 @@ final class AppModel: ObservableObject {
     var confirmationText: String {
         guard let request = pendingRequest else { return "" }
         let existing = request.variations - pendingIndices.count
-        let duration = request.plan.map { $0.totalMilliseconds / 1000 } ?? request.durationSeconds
-        return "Generate \(pendingIndices.count) track(s) of about \(duration) seconds using \(request.model.title), \(request.format.title)? \(existing) existing variation(s) will be kept. ElevenLabs credits may be charged for each new request."
+        let kept = existing > 0 ? "\n\(existing) completed \(existing == 1 ? "variation" : "variations") will be kept unchanged." : ""
+        return request.confirmationIntro(pendingCount: pendingIndices.count) + "\nModel: \(request.model.title)\nFormat: \(request.format.title)" + kept + "\nElevenLabs credits may be charged for each new request."
     }
 
     func beginGeneration() {
@@ -234,7 +246,7 @@ final class AppModel: ObservableObject {
                 addStatus(summary)
                 NSSound.beep()
                 NSApp.requestUserAttention(.informationalRequest)
-                notice = AppNotice(title: "Music Generation Complete", message: summary)
+                notice = AppNotice(title: "Generation Complete", message: summary)
             } catch is CancellationError {
                 addStatus("Generation cancelled. Completed tracks were kept.")
             } catch {

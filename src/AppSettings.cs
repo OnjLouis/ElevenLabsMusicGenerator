@@ -16,6 +16,10 @@ namespace ElevenLabsMusicGenerator
         public bool SaveGeneratedDetails { get; set; }
         public string OutputFormat { get; set; }
         public string ModelId { get; set; }
+        public decimal SoundEffectSeconds { get; set; }
+        public bool AutomaticSoundEffectDuration { get; set; }
+        public bool LoopSoundEffect { get; set; }
+        public decimal SoundEffectPromptInfluence { get; set; }
         public string UpdateCheckFrequency { get; set; }
         public bool InstallUpdatesSilently { get; set; }
         public DateTime LastUpdateCheckUtc { get; set; }
@@ -31,6 +35,9 @@ namespace ElevenLabsMusicGenerator
             SaveGeneratedDetails = true;
             OutputFormat = "pcm_44100";
             ModelId = "music_v2_5";
+            SoundEffectSeconds = 5;
+            AutomaticSoundEffectDuration = true;
+            SoundEffectPromptInfluence = 0.3m;
             UpdateCheckFrequency = "Never";
             InstallUpdatesSilently = false;
             LastUpdateCheckUtc = DateTime.MinValue;
@@ -51,6 +58,11 @@ namespace ElevenLabsMusicGenerator
             settings.SaveGeneratedDetails = ReadBool(ini, "General", "SaveGeneratedDetails", true);
             settings.OutputFormat = NormalizeOutputFormat(ini.Get("General", "OutputFormat", settings.OutputFormat));
             settings.ModelId = NormalizeModel(ini.Get("General", "ModelId", settings.ModelId));
+            decimal seconds, influence;
+            if (decimal.TryParse(ini.Get("SoundEffects", "Seconds", "5"), NumberStyles.Number, CultureInfo.InvariantCulture, out seconds)) settings.SoundEffectSeconds = Math.Max(0.5m, Math.Min(30m, seconds));
+            if (decimal.TryParse(ini.Get("SoundEffects", "PromptInfluence", "0.3"), NumberStyles.Number, CultureInfo.InvariantCulture, out influence)) settings.SoundEffectPromptInfluence = Math.Max(0, Math.Min(1, influence));
+            settings.AutomaticSoundEffectDuration = ReadBool(ini, "SoundEffects", "AutomaticDuration", true);
+            settings.LoopSoundEffect = ReadBool(ini, "SoundEffects", "Loop", false);
             settings.UpdateCheckFrequency = NormalizeUpdateFrequency(ini.Get("Updates", "CheckFrequency", settings.UpdateCheckFrequency));
             settings.InstallUpdatesSilently = ReadBool(ini, "Updates", "InstallSilently", settings.InstallUpdatesSilently);
             DateTime lastCheck;
@@ -81,6 +93,10 @@ namespace ElevenLabsMusicGenerator
             ini.Set("General", "SaveGeneratedDetails", SaveGeneratedDetails.ToString());
             ini.Set("General", "OutputFormat", NormalizeOutputFormat(OutputFormat));
             ini.Set("General", "ModelId", NormalizeModel(ModelId));
+            ini.Set("SoundEffects", "Seconds", SoundEffectSeconds.ToString(CultureInfo.InvariantCulture));
+            ini.Set("SoundEffects", "PromptInfluence", SoundEffectPromptInfluence.ToString(CultureInfo.InvariantCulture));
+            ini.Set("SoundEffects", "AutomaticDuration", AutomaticSoundEffectDuration.ToString());
+            ini.Set("SoundEffects", "Loop", LoopSoundEffect.ToString());
             ini.Set("Updates", "CheckFrequency", NormalizeUpdateFrequency(UpdateCheckFrequency));
             ini.Set("Updates", "InstallSilently", InstallUpdatesSilently.ToString());
             ini.Set("Updates", "LastCheckUtc", LastUpdateCheckUtc == DateTime.MinValue ? string.Empty : LastUpdateCheckUtc.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture));
@@ -106,7 +122,7 @@ namespace ElevenLabsMusicGenerator
         public static string NormalizeModel(string value)
         {
             var candidate = (value ?? string.Empty).Trim().ToLowerInvariant();
-            if (candidate == "music_v1" || candidate == "music_v2" || candidate == "music_v2_5") return candidate;
+            if (candidate == "music_v1" || candidate == "music_v2" || candidate == "music_v2_5" || candidate == MusicGenerationRequest.SoundEffectsModel) return candidate;
             return "music_v2_5";
         }
 

@@ -12,7 +12,7 @@ struct MusicService {
     }
 
     func suggestPlan(prompt: String, seconds: Int, model: MusicModel, key: String) async throws -> CompositionPlan {
-        guard model != .v1 else { throw MusicError.validation("Plans require Music v2 or v2.5.") }
+        guard model == .v2 || model == .v25 else { throw MusicError.validation("Plans require Music v2 or v2.5.") }
         let body: [String: Any] = ["prompt": prompt, "music_length_ms": seconds * 1000, "model_id": model.rawValue]
         let (data, _) = try await request(path: "/v1/music/plan", key: key, body: body)
         return try CompositionPlan.decodePayload(data)
@@ -26,15 +26,8 @@ struct MusicService {
             throw MusicError.validation("The existing track will not be overwritten: \(destination.lastPathComponent)")
         }
         try fm.createDirectory(at: input.outputFolder, withIntermediateDirectories: true)
-        var body: [String: Any] = ["model_id": input.model.rawValue]
-        if let plan = input.plan {
-            body["composition_plan"] = plan.payload
-        } else {
-            body["prompt"] = input.prompt
-            body["music_length_ms"] = input.durationSeconds * 1000
-            body["force_instrumental"] = input.instrumental
-        }
-        let path = input.includeDetails ? "/v1/music/detailed" : "/v1/music"
+        let body = input.payload
+        let path = input.endpoint
         var components = URLComponents(url: root.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
         components.queryItems = [URLQueryItem(name: "output_format", value: input.format.rawValue)]
         var request = URLRequest(url: components.url!)
@@ -60,7 +53,7 @@ struct MusicService {
         try? fm.removeItem(at: audioPart)
         try fm.moveItem(at: download, to: rawPart)
         let details: String?
-        if input.includeDetails {
+        if input.includeDetails && !input.isSoundEffect {
             let parsed = try MultipartMusicResponse.parse(file: rawPart, contentType: http.value(forHTTPHeaderField: "Content-Type") ?? "")
             details = parsed.metadata
             try parsed.audio.write(to: audioPart, options: .atomic)

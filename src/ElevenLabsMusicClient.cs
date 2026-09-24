@@ -112,8 +112,9 @@ namespace ElevenLabsMusicGenerator
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                Report(progress, requestData, variationIndex, outputPath, 0, "Requesting music from ElevenLabs.");
-                var url = apiRoot + (requestData.IncludeDetails ? "/v1/music/detailed" : "/v1/music") + "?output_format=" + HttpUtility.UrlEncode(requestData.OutputFormat);
+                Report(progress, requestData, variationIndex, outputPath, 0, requestData.IsSoundEffect ? "Requesting a sound effect from ElevenLabs." : "Requesting music from ElevenLabs.");
+                var includeDetails = requestData.IncludeDetails && !requestData.IsSoundEffect;
+                var url = apiRoot + (requestData.IsSoundEffect ? "/v1/sound-generation" : includeDetails ? "/v1/music/detailed" : "/v1/music") + "?output_format=" + HttpUtility.UrlEncode(requestData.OutputFormat);
                 var webRequest = CreateRequest(url, "POST");
                 var body = BuildRequestBody(requestData, variationIndex);
                 var bodyBytes = Encoding.UTF8.GetBytes(body);
@@ -127,7 +128,7 @@ namespace ElevenLabsMusicGenerator
                     using (var responseStream = response.GetResponseStream())
                     {
                         var rawTarget = requestData.OutputFormat.StartsWith("pcm_", StringComparison.OrdinalIgnoreCase) ? pcmPartPath : audioPartPath;
-                        var networkTarget = requestData.IncludeDetails ? multipartPartPath : rawTarget;
+                        var networkTarget = includeDetails ? multipartPartPath : rawTarget;
                         long received = 0;
                         using (var output = new FileStream(networkTarget, FileMode.Create, FileAccess.Write, FileShare.None))
                         {
@@ -145,7 +146,7 @@ namespace ElevenLabsMusicGenerator
 
                         if (received == 0) throw new InvalidDataException("ElevenLabs returned an empty audio file.");
                         MultipartMusicResponse details = null;
-                        if (requestData.IncludeDetails)
+                        if (includeDetails)
                         {
                             try { details = MultipartMusicResponse.Extract(multipartPartPath, response.ContentType, rawTarget); }
                             catch (Exception ex)
@@ -220,6 +221,18 @@ namespace ElevenLabsMusicGenerator
         private static string BuildRequestBody(MusicGenerationRequest requestData, int variationIndex)
         {
             var values = new Dictionary<string, object>();
+            if (requestData.IsSoundEffect)
+            {
+                if (string.IsNullOrWhiteSpace(requestData.Prompt) || requestData.Prompt.Length > MusicGenerationRequest.SoundEffectsPromptLimit) throw new ArgumentException("Enter a sound effects prompt of no more than 450 characters.");
+                if (!requestData.AutomaticDuration && (requestData.SoundEffectSeconds < 0.5m || requestData.SoundEffectSeconds > 30m)) throw new ArgumentException("Sound effects must last from 0.5 to 30 seconds.");
+                if (requestData.PromptInfluence < 0 || requestData.PromptInfluence > 1) throw new ArgumentException("Prompt influence must be between 0 and 1.");
+                values["text"] = requestData.Prompt;
+                values["model_id"] = MusicGenerationRequest.SoundEffectsModel;
+                if (!requestData.AutomaticDuration) values["duration_seconds"] = requestData.SoundEffectSeconds;
+                values["loop"] = requestData.Loop;
+                values["prompt_influence"] = requestData.PromptInfluence;
+                return new JavaScriptSerializer().Serialize(values);
+            }
             if (requestData.Plan == null)
             {
                 values["prompt"] = requestData.Prompt;

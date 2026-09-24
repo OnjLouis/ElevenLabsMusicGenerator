@@ -28,10 +28,16 @@ namespace ElevenLabsMusicGenerator.Tests
             {
                 if (args.Length == 2 && args[0] == "--live-auth-env") return RunLiveAuthentication(args[1]);
                 if (args.Length == 3 && args[0] == "--live-detail-smoke") return RunLiveDetailSmoke(args[1], args[2]);
+                if (args.Length == 3 && args[0] == "--live-effects-smoke") return RunLiveEffectsSmoke(args[1], args[2]);
                 if (args.Length == 2 && args[0] == "--live-plan-smoke") return RunLivePlanSmoke(args[1]);
                 if (args.Length == 3 && args[0] == "--live-plan-compose-smoke") return RunLivePlanComposeSmoke(args[1], args[2]);
                 if (args.Length == 2 && args[0] == "--private-updater-smoke") return RunPrivateUpdaterSmoke(args[1]);
                 Run("Settings round trip", TestSettingsRoundTrip);
+                Run("Sound effects model and request", TestSoundEffectsRequest);
+                Run("Sound effects generation and safe resume", TestSoundEffectsGeneration);
+                Run("Sound effects mode preserves music settings", TestSoundEffectsModeSwitch);
+                Run("Main model selector and persistence", TestMainModelSelector);
+                Run("Fresh and resumed confirmation wording", TestConfirmationWording);
                 Run("Portable music folder default", TestPortableMusicFolderDefault);
                 Run("Legacy API key migration", TestLegacyApiKeyMigration);
                 Run("Plaintext API key migration", TestPlaintextApiKeyMigration);
@@ -76,6 +82,148 @@ namespace ElevenLabsMusicGenerator.Tests
                 CleanupPortableTestData();
                 return 1;
             }
+        }
+
+        private static int RunLiveEffectsSmoke(string protectedKeyPath, string outputFolder)
+        {
+            Directory.CreateDirectory(outputFolder);
+            var key = ApiKeyProtector.Unprotect(File.ReadAllText(protectedKeyPath).Trim());
+            var request = new MusicGenerationRequest {
+                Prompt = "One short soft wooden tap, silence afterwards", BaseName = "Effect_test", OutputFolder = outputFolder,
+                ModelId = MusicGenerationRequest.SoundEffectsModel, SoundEffectSeconds = 1, PromptInfluence = 0.3m,
+                AutomaticDuration = false, Variations = 1, OutputFormat = "pcm_44100", IncludeDetails = true
+            };
+            var result = new ElevenLabsMusicClient(key).GenerateOne(request, request.OutputPaths()[0], 1, CancellationToken.None, null);
+            var bytes = File.ReadAllBytes(result.OutputPath);
+            Assert(bytes.Length == 44100 * 4 + 44 && Encoding.ASCII.GetString(bytes, 0, 4) == "RIFF", "Live response was not a one-second stereo WAV.");
+            Assert(MusicGenerationRequest.ReadSoundEffect(File.ReadAllText(request.PromptPath())).SoundEffectSeconds == 1, "Live effects sidecar was not reusable.");
+            Assert(!Directory.Exists(Path.Combine(outputFolder, "Lyrics")), "Sound effects created a lyrics directory.");
+            Console.WriteLine("PASS: live sound effects client produced a one-second stereo WAV and reusable prompt without lyric files.");
+            return 0;
+        }
+
+        private static void TestConfirmationWording()
+        {
+            var method = typeof(MusicGenerationRequest).GetMethod("ConfirmationIntro");
+            Assert(method != null, "Confirmation wording needs a testable request formatter.");
+            var request = new MusicGenerationRequest { ModelId = MusicGenerationRequest.SoundEffectsModel, Variations = 3, AutomaticDuration = true };
+            var fresh = (string)method.Invoke(request, new object[] { 3 });
+            Assert(fresh.StartsWith("Generate 3 sound effects?") && !fresh.Contains("missing"), "New effects must not be described as missing.");
+            Assert(fresh.Contains("Duration: Automatic, up to 30 seconds each."), "Automatic duration must read naturally.");
+            var resumed = (string)method.Invoke(request, new object[] { 1 });
+            Assert(resumed.StartsWith("Generate 1 remaining sound effect?"), "Resumed batch must identify remaining audio.");
+            request.ModelId = "music_v2_5";
+            request.LengthSeconds = 60;
+            var music = (string)method.Invoke(request, new object[] { 3 });
+            Assert(music.StartsWith("Generate 3 music tracks?") && music.Contains("Duration: 60 seconds each."), "Music confirmation must use the fixed duration.");
+        }
+
+        private static void TestMainModelSelector()
+        {
+            new AppSettings { DefaultLengthSeconds = 120, OutputFormat = "mp3_48000_192" }.Save();
+            using (var form = new MainForm(null))
+            {
+                var selector = Descendants(form).OfType<ComboBox>().FirstOrDefault(c => c.AccessibleName == "Model");
+                Assert(selector != null, "The main window needs a Model selector.");
+                Assert(selector.Items.Cast<string>().SequenceEqual(new[] { "Sound Effects v2", "Music v2.5", "Music v2", "Music v1" }), "Sound Effects must be first, followed by newest Music first.");
+                Assert(Convert.ToString(selector.SelectedItem) == "Music v2.5", "Display order must not change the saved or default model.");
+                Assert(selector.AccessibilityObject.KeyboardShortcut == "Alt+D", "Model must expose Alt+D.");
+                var handle = selector.Handle;
+                Assert(selector.AccessibilityObject.Role == AccessibleRole.ComboBox, "Model must retain its native combo-box role.");
+                selector.SelectedItem = "Sound Effects v2";
+                Assert(selector.AccessibilityObject.Value == "Sound Effects v2", "Model must expose its selected value.");
+                var saved = AppSettings.Load();
+                Assert(saved.ModelId == MusicGenerationRequest.SoundEffectsModel && saved.OutputFormat == "mp3_44100_192", "Effects selection and compatible format must be saved.");
+                Assert(saved.DefaultLengthSeconds == 120, "Changing model must preserve music duration.");
+                selector.SelectedItem = "Music v2.5";
+                Assert(AppSettings.Load().ModelId == "music_v2_5", "Music selection was not persisted.");
+                typeof(MainForm).GetMethod("SetGenerationControls", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(form, new object[] { true });
+                Assert(!selector.Enabled, "Model must be disabled during generation.");
+            }
+            using (var prefs = new PreferencesForm(new AppSettings(), 0))
+                Assert(!Descendants(prefs).OfType<ComboBox>().Any(c => c.Items.Contains("Sound Effects v2")), "Preferences must not duplicate the model selector.");
+            new AppSettings().Save();
+        }
+
+        private static void TestSoundEffectsModeSwitch()
+        {
+            var defaults = new AppSettings { DefaultLengthSeconds = 120, SoundEffectSeconds = 2.5m, AutomaticSoundEffectDuration = true };
+            defaults.Save();
+            using (var form = new MainForm(null))
+            {
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var settings = (AppSettings)typeof(MainForm).GetField("settings", flags).GetValue(form);
+                var length = (NumericUpDown)typeof(MainForm).GetField("lengthNumeric", flags).GetValue(form);
+                var method = typeof(MainForm).GetMethod("SetGenerationMode", flags);
+                settings.ModelId = MusicGenerationRequest.SoundEffectsModel;
+                method.Invoke(form, null);
+                var prompt = (TextBox)typeof(MainForm).GetField("promptTextBox", flags).GetValue(form);
+                var counter = (Label)typeof(MainForm).GetField("characterCountLabel", flags).GetValue(form);
+                prompt.Text = new string('a', 451);
+                Assert(counter.Text == "451 of 450 characters", "Sound Effects must show its own prompt limit without discarding the prompt.");
+                Assert(length.Value == 2.5m && !length.Enabled, "Automatic effects duration must disable the duration field.");
+                var instrumental = (CheckBox)typeof(MainForm).GetField("instrumentalCheckBox", flags).GetValue(form);
+                Assert(!instrumental.Enabled, "Effects must disable the music instrumental option.");
+                settings.ModelId = "music_v2_5";
+                method.Invoke(form, null);
+                Assert(counter.Text == "451 of 4100 characters" && prompt.TextLength == 451, "Switching back to Music must keep the full prompt.");
+                Assert(length.Value == 120 && length.Enabled && instrumental.Enabled, "Returning to Music must restore its duration and controls.");
+            }
+            new AppSettings().Save();
+        }
+
+        private static void TestSoundEffectsRequest()
+        {
+            if (AppSettings.NormalizeModel("eleven_text_to_sound_v2") != "eleven_text_to_sound_v2")
+                throw new Exception("Sound Effects must remain selected when settings are loaded.");
+            var request = new MusicGenerationRequest { ModelId = "eleven_text_to_sound_v2", Prompt = "A door closing", LengthSeconds = 3, SoundEffectSeconds = 3, OutputFormat = "pcm_44100", PromptInfluence = 0.3m };
+            var method = typeof(ElevenLabsMusicClient).GetMethod("BuildRequestBody", BindingFlags.Static | BindingFlags.NonPublic);
+            var body = (string)method.Invoke(null, new object[] { request, 1 });
+            if (!body.Contains("\"text\":\"A door closing\"") || body.Contains("music_length_ms") || body.Contains("force_instrumental"))
+                throw new Exception("Sound effects must use their own API payload without music fields.");
+            request.SoundEffectSeconds = 0.5m;
+            request.Loop = true;
+            body = (string)method.Invoke(null, new object[] { request, 1 });
+            Assert(body.Contains("\"duration_seconds\":0.5") && body.Contains("\"loop\":true"), "Fractional duration and loop must reach the API.");
+            request.AutomaticDuration = true;
+            body = (string)method.Invoke(null, new object[] { request, 1 });
+            Assert(!body.Contains("duration_seconds"), "Automatic duration must omit duration_seconds.");
+            var reopened = MusicGenerationRequest.ReadSoundEffect(request.SourceText());
+            Assert(reopened.Prompt == request.Prompt && reopened.AutomaticDuration && reopened.Loop && reopened.PromptInfluence == 0.3m, "Saved effects prompt did not restore settings.");
+            request.Prompt = new string('a', MusicGenerationRequest.SoundEffectsPromptLimit);
+            method.Invoke(null, new object[] { request, 1 });
+            MusicGenerationRequest.ReadSoundEffect(request.SourceText());
+            request.Prompt += "b";
+            var rejected = false;
+            try { method.Invoke(null, new object[] { request, 1 }); }
+            catch (TargetInvocationException error) { rejected = error.InnerException is ArgumentException; }
+            Assert(rejected, "Sound effects prompts over 450 characters must be rejected before the API call.");
+            rejected = false;
+            try { MusicGenerationRequest.ReadSoundEffect(request.SourceText()); }
+            catch (InvalidDataException) { rejected = true; }
+            Assert(rejected, "Saved sound effects prompts over 450 characters must be rejected.");
+        }
+
+        private static void TestSoundEffectsGeneration()
+        {
+            var folder = Path.Combine(AppPaths.AppFolder, "SoundEffectsTest");
+            var request = new MusicGenerationRequest { ModelId = MusicGenerationRequest.SoundEffectsModel, Prompt = "A wooden door closing", OutputFormat = "pcm_44100", OutputFolder = folder, BaseName = "Door", Variations = 2,
+                AutomaticDuration = true, SoundEffectSeconds = 0.5m, Loop = true, PromptInfluence = 0.7m, IncludeDetails = true };
+            using (var server = new MockHttpServer(new byte[44100 * 4]))
+            {
+                var client = new ElevenLabsMusicClient("test-key", server.ApiRoot);
+                client.GenerateOne(request, request.OutputPaths()[0], 1, CancellationToken.None, null);
+                server.Wait();
+                Assert(server.RequestText.Contains("POST /v1/sound-generation?output_format=pcm_44100"), "Wrong sound effects endpoint.");
+                Assert(!server.RequestText.Contains("composition_plan") && !server.RequestText.Contains("music_length_ms"), "Music fields leaked into effects request.");
+                Assert(!Directory.Exists(Path.Combine(folder, "Lyrics")), "Sound effects created a lyrics folder.");
+                Assert(GenerationBatchPlan.Create(request).PendingVariationIndices.SequenceEqual(new[] { 2 }), "Automatic duration batch did not resume.");
+                request.Loop = false;
+                var refused = false;
+                try { GenerationBatchPlan.Create(request); } catch (InvalidDataException) { refused = true; }
+                Assert(refused, "Changed effects settings must not silently resume an older batch.");
+            }
+            Directory.Delete(folder, true);
         }
 
         private static int RunLiveAuthentication(string envPath)
@@ -759,7 +907,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 {
                     { "&New Prompt", "Ctrl+N" }, { "&Open Prompt...", "Ctrl+O" },
                     { "&Save Prompt", "Ctrl+S" }, { "Save Prompt &As...", "Ctrl+Shift+S" },
-                    { "Open Output &Folder", "Ctrl+Shift+O" }, { "&Generate Music", "Ctrl+Enter" },
+                    { "Open Output &Folder", "Ctrl+Shift+O" }, { "&Generate", "Ctrl+Enter" },
                     { "&Cancel Generation", "Esc" }, { "&Preferences...", "Ctrl+," },
                     { "&Check for Updates...", "Shift+F1" }, { "ElevenLabs Music Generator &Help", "F1" },
                     { "&Project Page", "Ctrl+F1" }

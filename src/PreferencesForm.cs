@@ -17,7 +17,6 @@ namespace ElevenLabsMusicGenerator
         private readonly CheckBox instrumentalCheckBox;
         private readonly CheckBox detailsCheckBox;
         private readonly ComboBox formatComboBox;
-        private readonly ComboBox modelComboBox;
         private readonly TextBox apiKeyTextBox;
         private readonly CheckBox showKeyCheckBox;
         private readonly Button testKeyButton;
@@ -64,13 +63,11 @@ namespace ElevenLabsMusicGenerator
             instrumentalCheckBox = new CheckBox { Text = "Default to &instrumental music", AutoSize = true, AccessibleName = "Default to instrumental music" };
             detailsCheckBox = new CheckBox { Text = "Save &generated lyrics and details", AutoSize = true, AccessibleName = "Save generated lyrics and details" };
             formatComboBox = NewDropDown("Default output format", new[] { "PCM 44.1 kHz WAV", "MP3 44.1 kHz, 192 kbps", "MP3 44.1 kHz, 128 kbps", "MP3 48 kHz, 192 kbps", "MP3 48 kHz, 240 kbps", "MP3 48 kHz, 320 kbps" });
-            modelComboBox = NewDropDown("Default music model", new[] { "Music v2.5", "Music v2", "Music v1" });
             AddLabeledControl(general, "Default &length in seconds:", lengthNumeric);
             AddLabeledControl(general, "Default &variations:", variationsNumeric);
             AddFullWidthControl(general, instrumentalCheckBox);
             AddFullWidthControl(general, detailsCheckBox);
             AddLabeledControl(general, "Output &format:", formatComboBox);
-            AddLabeledControl(general, "Music &model:", modelComboBox);
             generalPage.Controls.Add(general);
 
             var api = NewPageLayout();
@@ -107,7 +104,7 @@ namespace ElevenLabsMusicGenerator
             {
                 AutoSize = true,
                 MaximumSize = new Size(610, 0),
-                Text = "Updates are accepted only when the package has a valid project signature. Settings, the User folder, prompts, API keys, logs, and generated music are preserved."
+                Text = "Updates are accepted only when the package has a valid project signature. Settings, the User folder, prompts, API keys, logs, and generated audio are preserved."
             };
             AddLabeledControl(updates, "&Check for updates:", updateFrequencyComboBox);
             AddFullWidthControl(updates, silentUpdatesCheckBox);
@@ -130,6 +127,7 @@ namespace ElevenLabsMusicGenerator
             CancelButton = cancelButton;
 
             LoadValues();
+            UpdateModelOptions();
             tabs.SelectedIndex = Math.Max(0, Math.Min(tabs.TabCount - 1, initialTab));
         }
 
@@ -141,6 +139,19 @@ namespace ElevenLabsMusicGenerator
             return base.ProcessCmdKey(ref msg, keyData);
         }
 
+        private void UpdateModelOptions()
+        {
+            var effects = settings.ModelId == MusicGenerationRequest.SoundEffectsModel;
+            lengthNumeric.Enabled = !effects;
+            instrumentalCheckBox.Enabled = !effects;
+            detailsCheckBox.Enabled = !effects;
+            var selected = Convert.ToString(formatComboBox.SelectedItem);
+            formatComboBox.Items.Clear();
+            formatComboBox.Items.AddRange(new object[] { "PCM 44.1 kHz WAV", "MP3 44.1 kHz, 192 kbps", "MP3 44.1 kHz, 128 kbps" });
+            if (!effects) formatComboBox.Items.AddRange(new object[] { "MP3 48 kHz, 192 kbps", "MP3 48 kHz, 240 kbps", "MP3 48 kHz, 320 kbps" });
+            formatComboBox.SelectedItem = formatComboBox.Items.Contains(selected) ? selected : "MP3 44.1 kHz, 192 kbps";
+        }
+
         private void LoadValues()
         {
             outputFolderTextBox.Text = settings.DefaultOutputFolder;
@@ -149,7 +160,6 @@ namespace ElevenLabsMusicGenerator
             instrumentalCheckBox.Checked = settings.DefaultInstrumental;
             detailsCheckBox.Checked = settings.SaveGeneratedDetails;
             formatComboBox.SelectedItem = FormatDisplay(settings.OutputFormat);
-            modelComboBox.SelectedItem = ModelDisplay(settings.ModelId);
             apiKeyTextBox.Text = AppPaths.LoadApiKey();
             if (AppPaths.ApiKeyLoadMessage.Length > 0) SetApiStatus(AppPaths.ApiKeyLoadMessage);
             updateFrequencyComboBox.SelectedItem = settings.UpdateCheckFrequency == "Startup" ? "At startup" : settings.UpdateCheckFrequency;
@@ -181,7 +191,6 @@ namespace ElevenLabsMusicGenerator
             settings.DefaultInstrumental = instrumentalCheckBox.Checked;
             settings.SaveGeneratedDetails = detailsCheckBox.Checked;
             settings.OutputFormat = StoredFormat(Convert.ToString(formatComboBox.SelectedItem));
-            settings.ModelId = StoredModel(Convert.ToString(modelComboBox.SelectedItem));
             settings.UpdateCheckFrequency = AppSettings.NormalizeUpdateFrequency(Convert.ToString(updateFrequencyComboBox.SelectedItem).Replace("At startup", "Startup"));
             settings.InstallUpdatesSilently = silentUpdatesCheckBox.Checked;
             settings.LastPreferencesTab = tabs.SelectedIndex;
@@ -238,7 +247,7 @@ namespace ElevenLabsMusicGenerator
         {
             using (var dialog = new FolderBrowserDialog())
             {
-                dialog.Description = "Choose the default folder for generated music.";
+                dialog.Description = "Choose the default folder for generated audio.";
                 dialog.ShowNewFolderButton = true;
                 if (Directory.Exists(outputFolderTextBox.Text)) dialog.SelectedPath = outputFolderTextBox.Text;
                 if (dialog.ShowDialog(this) == DialogResult.OK) outputFolderTextBox.Text = dialog.SelectedPath;
@@ -317,18 +326,5 @@ namespace ElevenLabsMusicGenerator
             return "pcm_44100";
         }
 
-        private static string ModelDisplay(string value)
-        {
-            if (value == "music_v1") return "Music v1";
-            if (value == "music_v2") return "Music v2";
-            return "Music v2.5";
-        }
-
-        private static string StoredModel(string value)
-        {
-            if (value == "Music v1") return "music_v1";
-            if (value == "Music v2") return "music_v2";
-            return "music_v2_5";
-        }
     }
 }

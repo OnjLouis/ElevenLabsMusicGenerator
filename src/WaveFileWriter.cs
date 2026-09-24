@@ -46,7 +46,8 @@ namespace ElevenLabsMusicGenerator
             using (var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
             using (var reader = new BinaryReader(input, Encoding.ASCII))
             {
-                if (input.Length != headerBytes + expectedDataBytes) return false;
+                if (durationMilliseconds == 0) expectedDataBytes = input.Length - headerBytes;
+                if (expectedDataBytes <= 0 || expectedDataBytes % 4 != 0 || input.Length != headerBytes + expectedDataBytes) return false;
                 return Encoding.ASCII.GetString(reader.ReadBytes(4)) == "RIFF" &&
                     reader.ReadUInt32() == input.Length - 8 &&
                     Encoding.ASCII.GetString(reader.ReadBytes(4)) == "WAVE" &&

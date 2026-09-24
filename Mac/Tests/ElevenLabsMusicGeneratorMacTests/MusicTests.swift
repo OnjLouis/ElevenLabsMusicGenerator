@@ -3,6 +3,57 @@ import XCTest
 @testable import ElevenLabsMusicGeneratorMac
 
 final class MusicTests: XCTestCase {
+    func testModelDisplayOrder() {
+        XCTAssertEqual(MusicModel.allCases, [.soundEffects, .v25, .v2, .v1])
+        XCTAssertEqual(AppPreferences().model, MusicModel.v25.rawValue)
+    }
+    func testConfirmationWording() {
+        var request = GenerationRequest(prompt: "A door", baseName: "Door", outputFolder: URL(fileURLWithPath: "/tmp"), durationSeconds: 60, variations: 3, instrumental: false, model: .soundEffects, format: .wav, includeDetails: false, plan: nil)
+        XCTAssertEqual(request.confirmationIntro(pendingCount: 3), "Generate 3 sound effects?\nDuration: Automatic, up to 30 seconds each.")
+        XCTAssertTrue(request.confirmationIntro(pendingCount: 1).hasPrefix("Generate 1 remaining sound effect?"))
+        request.model = .v25
+        XCTAssertEqual(request.confirmationIntro(pendingCount: 3), "Generate 3 music tracks?\nDuration: 60 seconds each.")
+    }
+    func testSoundEffectsPayloadAndSavedPrompt() throws {
+        var input = GenerationRequest(prompt: "A wooden door closing", baseName: "Door", outputFolder: URL(fileURLWithPath: "/tmp"), durationSeconds: 60, variations: 2, instrumental: true, model: .soundEffects, format: .wav, includeDetails: true, plan: nil)
+        input.effects = SoundEffectOptions(duration: 0.5, automaticDuration: false, loop: true, promptInfluence: 0.7)
+        try input.validate()
+        XCTAssertEqual(input.endpoint, "/v1/sound-generation")
+        XCTAssertEqual(input.payload["duration_seconds"] as? Double, 0.5)
+        XCTAssertEqual(input.payload["loop"] as? Bool, true)
+        XCTAssertNil(input.payload["force_instrumental"])
+        XCTAssertNil(input.payload["music_length_ms"])
+        let saved = try GenerationRequest.readSoundEffect(input.sourceData)
+        XCTAssertEqual(saved.prompt, input.prompt)
+        XCTAssertEqual(saved.effects.duration, 0.5)
+        XCTAssertTrue(saved.effects.loop)
+        input.effects.automaticDuration = true
+        XCTAssertNil(input.payload["duration_seconds"])
+        XCTAssertTrue(try GenerationRequest.readSoundEffect(input.sourceData).effects.automaticDuration)
+        input.format = .mp3_48000_192
+        XCTAssertThrowsError(try input.validate())
+    }
+
+    func testSoundEffectPromptLengthLimit() throws {
+        var input = GenerationRequest(prompt: String(repeating: "a", count: 450), baseName: "Test", outputFolder: URL(fileURLWithPath: "/tmp"), durationSeconds: 5, variations: 1, instrumental: false, model: .soundEffects, format: .wav, includeDetails: false, plan: nil)
+        try input.validate()
+        input.prompt += "b"
+        XCTAssertThrowsError(try input.validate())
+        input.model = .v25
+        try input.validate()
+    }
+
+    func testExistingPreferencesSurviveNewSoundEffectsSettings() throws {
+        let old = #"{"outputFolder":"/Music/Test","durationSeconds":90,"variations":3,"instrumental":true,"model":"music_v2_5","format":"pcm_44100","includeDetails":true}"#
+        var prefs = try JSONDecoder().decode(AppPreferences.self, from: Data(old.utf8))
+        XCTAssertEqual(prefs.durationSeconds, 90)
+        XCTAssertEqual(prefs.outputFolder, "/Music/Test")
+        XCTAssertEqual(prefs.effects.duration, 5)
+        prefs.effects.loop = true
+        let restored = try JSONDecoder().decode(AppPreferences.self, from: JSONEncoder().encode(prefs))
+        XCTAssertTrue(restored.effects.loop)
+        XCTAssertEqual(restored.durationSeconds, 90)
+    }
     func testMacReleaseCheckSelectsOnlyNewerPublishedMacPackage() throws {
         let json = """
         [
@@ -199,6 +250,35 @@ final class MusicTests: XCTestCase {
         XCTAssertTrue(try String(contentsOf: result.lyricsURL!).contains("Hello world"))
         let names = try FileManager.default.contentsOfDirectory(atPath: folder.path)
         XCTAssertFalse(names.contains(where: { $0.contains(".part") }))
+    }
+
+    func testSoundEffectGenerationAndAutomaticResume() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder); StubProtocol.reply = nil }
+        StubProtocol.reply = { request in
+            XCTAssertEqual(request.url?.path, "/v1/sound-generation")
+            XCTAssertEqual(request.url?.query, "output_format=pcm_44100")
+            let body = try! JSONSerialization.jsonObject(with: request.httpBody!) as! [String: Any]
+            XCTAssertEqual(body["text"] as? String, "A door closing")
+            XCTAssertNil(body["music_length_ms"])
+            XCTAssertNil(body["duration_seconds"])
+            return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil,
+                headerFields: ["Content-Type": "audio/pcm"])!, Data(repeating: 0, count: 44100 * 4))
+        }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StubProtocol.self]
+        let service = MusicService(session: URLSession(configuration: configuration))
+        var request = GenerationRequest(prompt: "A door closing", baseName: "Door", outputFolder: folder,
+            durationSeconds: 60, variations: 2, instrumental: true, model: .soundEffects,
+            format: .wav, includeDetails: true, plan: nil)
+        let result = try await service.generate(request, index: 1, key: "fake-key")
+        XCTAssertEqual(try Data(contentsOf: result.url).count, 44100 * 4 + 44)
+        XCTAssertNil(result.lyricsURL)
+        XCTAssertNil(result.detailsURL)
+        XCTAssertEqual(try BatchPlanner.pending(request), [2])
+        request.effects.loop = true
+        XCTAssertThrowsError(try BatchPlanner.pending(request))
     }
 
     func testMalformedDetailedResponseLeavesNoPartialOutput() async throws {

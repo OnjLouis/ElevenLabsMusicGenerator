@@ -1,12 +1,13 @@
 <!doctype html>
 <html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ElevenLabs Music Generator for Mac - Help</title>
+<title>ElevenLabs Music and Sound FX Generator for Mac - Help</title>
 <style>body{font:1rem/1.55 -apple-system,BlinkMacSystemFont,sans-serif;max-width:58rem;margin:2rem auto;padding:0 1rem;color:#202124;background:white}table{border-collapse:collapse;width:100%}th,td{border:1px solid #777;padding:.4rem;text-align:left}code{font-family:ui-monospace,monospace}</style></head><body><main>
-<h1>ElevenLabs Music Generator for Mac</h1>
-<p>A native macOS application for making music with the ElevenLabs Music API.</p>
+<h1>ElevenLabs Music and Sound FX Generator for Mac</h1>
+<p>A native macOS application for making music and sound effects with ElevenLabs.</p>
 <h2 id="contents">Contents</h2><ul>
 <li><a href="#changelog">Changelog</a></li><li><a href="#prerequisites">Prerequisites And API Key</a></li>
 <li><a href="#first-run">First Run</a></li><li><a href="#generating-music">Generating Music</a></li>
+<li><a href="#sound-effects">Generating Sound Effects</a></li>
 <li><a href="#composition-plans">Composition Plans And Lyrics</a></li>
 <li><a href="#results-and-credits">Results And Credit Usage</a></li>
 <li><a href="#prompt-drafts">Prompt Drafts</a></li>
@@ -14,7 +15,10 @@
 <li><a href="#keyboard-commands">Keyboard Commands</a></li>
 <li><a href="#updates">Updates</a></li><li><a href="#files-and-storage">Files and Storage</a></li>
 <li><a href="#credits">Credits</a></li></ul>
-<h2 id="changelog">Changelog</h2><h3>1.0.0 - 23 September 2026</h3>
+<h2 id="changelog">Changelog</h2>
+<h3>1.1.0 - 24 September 2026</h3>
+<p>Added Sound Effects v2, with automatic or fixed duration, looping, prompt influence, and reusable sound-effect prompts. Music-only controls are restored when switching back; an unsupported 48 kHz output choice changes to a supported 44.1 kHz format.</p>
+<h3>1.0.0 - 23 September 2026</h3>
 <p>Initial Mac release for Apple Silicon and Intel, with prompt and plan generation, Keychain credentials, safe batch resumption, returned lyrics and details, and standard Mac menus.</p>
 <h2 id="prerequisites">Prerequisites And API Key</h2>
 <p>Requires macOS 14 or later, an internet connection, and an ElevenLabs account with Music API access and sufficient credits. Music generation can spend credits.</p>
@@ -34,6 +38,10 @@
 <li>Use <strong>Generate</strong> or Command-Return. Review the confirmation: it states the number and length of new requests and warns that credits may be spent.</li></ol>
 <p>Prompt mode saves one shared text file containing your input prompt. Variations use suffixes such as <code>_v1</code> and <code>_v2</code>. The shared prompt file is not a transcription of what was sung.</p>
 <p>If a batch stops, Generate checks the saved prompt or plan and existing audio, then offers to make only missing variations. WAV length and format are checked during resumption. MP3 duration cannot be verified automatically, so inspect existing MP3 tracks before confirming. Existing tracks are never overwritten. If a check fails, choose a different Base filename.</p>
+<h2 id="sound-effects">Generating Sound Effects</h2>
+<p>In the main window, choose <strong>Sound Effects v2</strong> from Model. Enter a sound description of up to 450 characters, choose a base filename and variations, then Generate. Enable Sound Effects access for your API key on ElevenLabs. Test Key checks Music access only; it does not verify Sound Effects permission.</p>
+<p><strong>Automatic duration</strong> lets the service choose the length. Turn it off to enter 0.5 to 30 seconds. <strong>Loop</strong> requests a seamless loop. <strong>Prompt influence</strong> ranges from 0 to 1; a higher value follows your wording more closely. Sound Effects supports the app's 44.1 kHz WAV and MP3 formats. Music-only options are unavailable in this mode; switching back restores the music controls.</p>
+<p>Sound effects use the same output folder as music. Each batch saves one <code>.sfx.json</code> containing the prompt and its settings, without lyrics files. Choose <strong>Open Prompt</strong> to reuse this file; change the base filename for a new batch. Save Prompt still saves an ordinary text copy. Resuming an interrupted batch requires matching sound-effect settings and keeps completed audio. See the <a href="https://elevenlabs.io/docs/api-reference/text-to-sound-effects/convert">Sound Effects API reference</a> for service details.</p>
 <h2 id="composition-plans">Composition Plans And Lyrics</h2>
 <p>Music v2 and v2.5 can use a section-based plan. Open <strong>Edit Plan</strong> or press Command-P to prepare one even when <strong>Use composition plan</strong> is off. Enable that checkbox when you want generation to use the plan. Each section has a heading, duration in milliseconds, optional lyric lines or musical cues, included/excluded styles, and context adherence. Use <strong>Open Plan or Details</strong> to load a saved plan or a track's details file when it contains a reusable plan. <strong>Export Plan</strong> saves the plan as a JSON file.</p>
 <p><strong>Suggest from Prompt</strong> asks ElevenLabs for a draft plan; review it before generation. Plan mode uses section durations instead of the main Length setting. It follows the plan rather than the plain prompt, and Force instrumental is unavailable. The current plan is restored when you reopen the app.</p>

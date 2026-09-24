@@ -8,9 +8,16 @@ namespace ElevenLabsMusicGenerator
 {
     internal sealed class MusicGenerationRequest
     {
+        public const string SoundEffectsModel = "eleven_text_to_sound_v2";
+        public const int SoundEffectsPromptLimit = 450;
+        public bool IsSoundEffect { get { return ModelId == SoundEffectsModel; } }
+        public decimal SoundEffectSeconds { get; set; }
+        public bool AutomaticDuration { get; set; }
+        public bool Loop { get; set; }
+        public decimal PromptInfluence { get; set; }
         public string Prompt { get; set; }
         public int LengthSeconds { get; set; }
-        public int LengthMilliseconds { get { return Plan == null ? LengthSeconds * 1000 : Plan.TotalMilliseconds; } }
+        public int LengthMilliseconds { get { return IsSoundEffect ? (AutomaticDuration ? 0 : (int)(SoundEffectSeconds * 1000)) : Plan == null ? LengthSeconds * 1000 : Plan.TotalMilliseconds; } }
         public int Variations { get; set; }
         public bool Instrumental { get; set; }
         public string OutputFormat { get; set; }
@@ -20,6 +27,15 @@ namespace ElevenLabsMusicGenerator
         public bool IncludeDetails { get; set; }
         public string OutputFolder { get; set; }
         public string BaseName { get; set; }
+
+        public string ConfirmationIntro(int pendingCount)
+        {
+            var kind = IsSoundEffect ? "sound effect" : "music track";
+            var duration = IsSoundEffect && AutomaticDuration ? "Automatic, up to 30 seconds each." :
+                (LengthMilliseconds / 1000m).ToString("0.###") + " seconds each.";
+            return "Generate " + pendingCount + (pendingCount < Variations ? " remaining " : " ") + kind +
+                (pendingCount == 1 ? "?" : "s?") + Environment.NewLine + "Duration: " + duration;
+        }
 
         public IList<string> OutputPaths()
         {
@@ -32,10 +48,30 @@ namespace ElevenLabsMusicGenerator
 
         public string PromptPath()
         {
-            return Path.Combine(OutputFolder, FileNameHelper.SafeStem(BaseName, Prompt) + (Plan == null ? ".txt" : ".plan.json"));
+            return Path.Combine(OutputFolder, FileNameHelper.SafeStem(BaseName, Prompt) + (IsSoundEffect ? ".sfx.json" : Plan == null ? ".txt" : ".plan.json"));
         }
 
-        public string SourceText() { return Plan == null ? Prompt.TrimEnd() : Plan.ToJson(); }
+        public string SourceText()
+        {
+            if (IsSoundEffect) return new System.Web.Script.Serialization.JavaScriptSerializer().Serialize(new Dictionary<string, object> {
+                { "model_id", ModelId }, { "text", Prompt.TrimEnd() }, { "duration_seconds", AutomaticDuration ? (object)null : SoundEffectSeconds },
+                { "loop", Loop }, { "prompt_influence", PromptInfluence }, { "output_format", OutputFormat } });
+            return Plan == null ? Prompt.TrimEnd() : Plan.ToJson();
+        }
+
+        public static MusicGenerationRequest ReadSoundEffect(string json)
+        {
+            var data = new System.Web.Script.Serialization.JavaScriptSerializer().Deserialize<Dictionary<string, object>>(json);
+            if (data == null || !data.ContainsKey("model_id") || Convert.ToString(data["model_id"]) != SoundEffectsModel)
+                throw new InvalidDataException("This is not a saved sound effects prompt.");
+            var result = new MusicGenerationRequest { ModelId = SoundEffectsModel, Prompt = Convert.ToString(data["text"]),
+                AutomaticDuration = data["duration_seconds"] == null, SoundEffectSeconds = data["duration_seconds"] == null ? 5 : Convert.ToDecimal(data["duration_seconds"]),
+                Loop = Convert.ToBoolean(data["loop"]), PromptInfluence = Convert.ToDecimal(data["prompt_influence"]), OutputFormat = Convert.ToString(data["output_format"]) };
+            if (string.IsNullOrWhiteSpace(result.Prompt) || result.Prompt.Length > SoundEffectsPromptLimit || result.SoundEffectSeconds < 0.5m || result.SoundEffectSeconds > 30 || result.PromptInfluence < 0 || result.PromptInfluence > 1 ||
+                (result.OutputFormat != "pcm_44100" && result.OutputFormat != "mp3_44100_128" && result.OutputFormat != "mp3_44100_192"))
+                throw new InvalidDataException("The saved sound effects settings are invalid.");
+            return result;
+        }
     }
 
     internal static class FileNameHelper

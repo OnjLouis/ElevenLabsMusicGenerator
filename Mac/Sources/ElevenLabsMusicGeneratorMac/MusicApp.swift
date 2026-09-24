@@ -5,7 +5,7 @@ struct ElevenLabsMusicGeneratorApp: App {
     @StateObject private var model = AppModel()
 
     var body: some Scene {
-        WindowGroup("ElevenLabs Music Generator") {
+        WindowGroup("ElevenLabs Music and Sound FX Generator") {
             MainView(model: model)
                 .frame(minWidth: 760, minHeight: 700)
         }
@@ -17,7 +17,9 @@ struct ElevenLabsMusicGeneratorApp: App {
                 Button("Open Prompt...") { model.openPrompt() }
                     .keyboardShortcut("o", modifiers: .command)
                 Button("Open Composition Plan...") { model.openPlan() }
+                    .disabled(model.isSoundEffect)
                 Button("Edit Composition Plan...") { model.editPlan() }
+                    .disabled(model.isSoundEffect)
                     .keyboardShortcut("p", modifiers: .command)
                 Divider()
                 Button("Save Prompt") { model.savePrompt() }
@@ -36,10 +38,10 @@ struct ElevenLabsMusicGeneratorApp: App {
             }
             CommandMenu("Controls") {
                 Toggle("Instrumental", isOn: $model.preferences.instrumental)
-                    .disabled(model.planEnabled)
+                    .disabled(model.planEnabled || model.isSoundEffect)
                     .keyboardShortcut("i", modifiers: .command)
                 Toggle("Use Composition Plan", isOn: $model.planEnabled)
-                    .disabled(model.selectedModel == .v1)
+                    .disabled(model.selectedModel == .v1 || model.isSoundEffect)
                     .keyboardShortcut("u", modifiers: .command)
                 Divider()
                 Button("Choose Model") { model.focus(.model) }
@@ -48,7 +50,7 @@ struct ElevenLabsMusicGeneratorApp: App {
                     .keyboardShortcut("f", modifiers: [.command, .shift])
             }
             CommandGroup(replacing: .help) {
-                Button("ElevenLabs Music Generator Help") { model.openManual() }
+                Button("ElevenLabs Music and Sound FX Generator Help") { model.openManual() }
                     .keyboardShortcut(KeyEquivalent("\u{F704}"), modifiers: [])
                 Button("Project Page") { model.openProjectPage() }
                     .keyboardShortcut(KeyEquivalent("\u{F704}"), modifiers: .command)
