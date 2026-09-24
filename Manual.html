@@ -35,6 +35,8 @@ code { font-family: Consolas, monospace; }
 </ul>
 
 <h2 id="changelog">Changelog</h2>
+<h3>1.2.0 - 24 September 2026</h3>
+<p>Improved sound-effect length focus order, prompt limits and character counts, music title naming, filenames with spaces, first-run update checks, and separate Music and Sound FX drafts in one saved file.</p>
 <h3>1.1.0 - 24 September 2026</h3>
 <p>Added Sound Effects v2, automatic or fixed duration, seamless looping, prompt influence, and reusable sound effects prompts.</p>
 <h3>1.0.0 - 23 September 2026</h3>
@@ -60,17 +62,19 @@ code { font-family: Consolas, monospace; }
 <ol>
 <li>Write or paste a prompt into the standard multiline Prompt field.</li>
 <li>Choose the length, number of variations, and whether the result must be instrumental.</li>
-<li>Review the automatically suggested base filename. The output folder is the one saved in Preferences.</li>
+<li>Review the automatically suggested base filename. Spaces are kept. Clear it to name each music variation from ElevenLabs' returned song title; if no title is returned, the prompt supplies a fallback. The output folder is the one saved in Preferences.</li>
 <li>Press <strong>Generate</strong> or <kbd>Ctrl</kbd>+<kbd>Enter</kbd>.</li>
 <li>Review the confirmation carefully. Generation starts only after you confirm that ElevenLabs credits will be spent.</li>
 </ol>
 <p>Prompt mode saves one shared text file containing your input prompt. Variations use suffixes such as <code>_v1</code> and <code>_v2</code>. The shared prompt file is not a transcription of what was sung.</p>
+<p>When the base filename is blank, each completed music variation uses the title returned by ElevenLabs and a two-digit sequence prefix, such as <code>01 - Song title.wav</code>. The <code>_v1</code> suffix is not used for returned titles. The app stores a small <code>.titles.json</code> batch record under <code>Lyrics</code> so an interrupted batch can resume without paying for completed tracks again. Keep this record with the audio and shared prompt. Title naming uses the detailed response even when saving lyrics and details is turned off.</p>
 <p>When you move into a length or variations field, its current number is selected so that typing replaces it. Review the length and variation count in the confirmation dialog before spending credits.</p>
 <p>If a batch was interrupted, Generate checks the existing tracks and offers to make only missing variations. The saved prompt must match, and existing WAV files must have the expected format and duration. An existing MP3's duration cannot be verified automatically, so review the confirmation carefully. If a check fails, choose a different base filename; existing tracks are never overwritten. Keep the same model and instrumental setting when resuming a batch.</p>
 
 <h2 id="sound-effects">Generating Sound Effects</h2>
 <p>In the main window, press Alt+D and choose <strong>Sound Effects v2</strong> from Model. Enter a sound description of up to 450 characters, choose a base filename and variations, then Generate. Enable Sound Effects access for your API key on ElevenLabs. Test API key checks Music access only; it does not verify Sound Effects permission.</p>
 <p><strong>Automatic duration</strong> lets the service choose the length. Turn it off to enter 0.5 to 30 seconds. <strong>Loop sound effect</strong> requests a seamless loop. <strong>Prompt influence</strong> ranges from 0 to 1; a higher value follows your wording more closely. Sound Effects supports the app's 44.1 kHz WAV and MP3 formats. Music-only options are unavailable in this mode; switching back restores the music controls.</p>
+<p>The prompt counter shows characters used and remaining. Typing or pasting stops at the active model's limit: 450 characters for Sound Effects, 4,100 for Music. If you switch from a longer Music prompt to Sound Effects, the full Music draft is kept separately and restored when you return to Music.</p>
 <p>Sound effects use the same output folder as music. Each batch saves one <code>.sfx.json</code> containing the prompt and its settings, without lyrics files. Choose <strong>Open Prompt</strong> to reuse this file; change the base filename for a new batch. Save Prompt still saves an ordinary text copy. Resuming an interrupted batch requires matching sound-effect settings and keeps completed audio. See the <a href="https://elevenlabs.io/docs/api-reference/text-to-sound-effects/convert">Sound Effects API reference</a> for service details.</p>
 
 <h2 id="composition-plans">Composition Plans And Lyrics</h2>
@@ -80,12 +84,18 @@ code { font-family: Consolas, monospace; }
 <p>Plan mode uses section durations rather than the main Length field, and it disables Force instrumental; put instrumental directions in the relevant sections. The plan takes the place of the plain prompt during generation. The editor is unavailable for Music v1.</p>
 
 <h2 id="results-and-credits">Results And Credit Usage</h2>
-<p>When <strong>Save generated lyrics and details</strong> is enabled in Preferences, each successful track gets its own details file under <code>Lyrics</code>, such as <code>Lyrics\Song_v1.details.json</code>. It records the information returned by ElevenLabs. If that information includes a composition plan, use <strong>Open plan or details</strong> to load and edit it for another generation. A details file without a reusable plan cannot be opened as a plan. If ElevenLabs returns lyric lines, <code>Lyrics\Song_v1.txt</code> is saved for that variation. If WAV and MP3 audio share the same name, these files keep the audio extension to avoid a name collision. Audio and the shared prompt stay in the chosen music folder. These are returned lyrics, not a transcript of the recording. Turn this setting off if you only want audio files.</p>
-<p>The status log shows the elapsed time for the batch and lists each completed track on a separate line. ElevenLabs does not report a reliable credit charge for each request; use <a href="https://elevenlabs.io/app/developers/analytics/usage">ElevenLabs Usage Analytics</a> to check actual consumption. The same page opens from <strong>Help, Usage Analytics</strong>. A failed or cancelled request may still affect usage.</p>
+<p>When <strong>Save generated lyrics and details</strong> is enabled in Preferences, each successful track gets its own details file under <code>Lyrics</code>, such as <code>Lyrics\Song_v1.details.json</code>. It records the information returned by ElevenLabs. If that information includes a composition plan, use <strong>Open plan or details</strong> to load and edit it for another generation. A details file without a reusable plan cannot be opened as a plan. If ElevenLabs returns lyric lines, <code>Lyrics\Song_v1.txt</code> is saved for that variation. If WAV and MP3 audio share the same name, these files keep the audio extension to avoid a name collision. Audio and the shared prompt stay in the chosen music folder. These are returned lyrics, not a transcript of the recording. Turn this setting off to skip lyric and details files; title-named batches still need their small resume record.</p>
+<p>The status log shows the elapsed time for the batch and the generation time for each completed track on a separate line. These are processing times, not audio playing lengths. ElevenLabs does not report a reliable credit charge for each request; use <a href="https://elevenlabs.io/app/developers/analytics/usage">ElevenLabs Usage Analytics</a> to check actual consumption. The same page opens from <strong>Help, Usage Analytics</strong>. A failed or cancelled request may still affect usage.</p>
+<table><thead><tr><th>Action</th><th>What affects usage</th></tr></thead><tbody>
+<tr><td>Generate Music</td><td>Generated duration and number of variations.</td></tr>
+<tr><td>Generate Sound Effects with automatic duration</td><td>Each completed effect is a separate request; ElevenLabs chooses its duration.</td></tr>
+<tr><td>Generate Sound Effects with fixed duration</td><td>Requested seconds and number of variations.</td></tr>
+<tr><td>Suggest a composition plan or Test API key</td><td>No audio is generated; these actions do not spend generation credits.</td></tr></tbody></table>
+<p>Rates and plan allowances can change. See <a href="https://elevenlabs.io/pricing/api">ElevenLabs API pricing</a> and <a href="https://help.elevenlabs.io/hc/en-us/articles/25735337678481-How-much-does-it-cost-to-generate-sound-effects">its Sound Effects cost explanation</a> before a large batch.</p>
 <p>PCM 44.1 kHz is saved as a WAV file. MP3 choices include 44.1 kHz at 128 or 192 kbps and 48 kHz at 192, 240, or 320 kbps. Actual format availability can depend on the account and API response; the service's error is shown if a requested format is not available.</p>
 
 <h2 id="prompt-drafts">Prompt Drafts</h2>
-<p>The prompt is saved automatically to <code>User\Prompt draft.txt</code> after editing and when the application closes. It is restored on the next launch. The first manual Save Prompt opens the Save dialog in the music output folder selected in Preferences. Later saves update the chosen file; Save As starts in the current music output folder.</p>
+<p>Music and Sound FX prompts are saved together in <code>User\Prompt drafts.json</code> after editing and when the application closes. Each mode restores its own unfinished text, including after restarting the app. This draft file is application data, not a reusable generation prompt. The first manual Save Prompt opens the Save dialog in the music output folder selected in Preferences. Later saves update the chosen file; Save As starts in the current music output folder.</p>
 
 <h2 id="cancellation-and-failure">Cancellation And Failure</h2>
 <p>Cancel stops the active request and removes incomplete temporary files. Variations completed before cancellation or a later failure are kept. A track appears in the chosen folder only when it is complete. If downloaded audio cannot be processed, the data is kept beside the intended output so it is not lost.</p>
@@ -116,11 +126,11 @@ code { font-family: Consolas, monospace; }
 </table>
 
 <h2 id="updates">Updates</h2>
-<p>Update checks are available from Help and can be scheduled in Preferences. Automatic checks default to Never. An install requires a ZIP and a valid matching signature; unsigned or invalid packages are not installed. Update checks require an internet connection and may report that no release is available.</p>
+<p>Update checks are available from Help and can be scheduled in Preferences. New installations check when the app starts; existing update preferences are kept. You can change the schedule or turn checks off. An install requires a ZIP and a valid matching signature; unsigned or invalid packages are not installed. Update checks require an internet connection and may report that no release is available.</p>
 <p>Use <strong>Project Page</strong> to open the <a href="https://github.com/OnjLouis/ElevenLabsMusicGenerator">GitHub project page</a> in your browser. More of Andre Louis's applications are listed on the <a href="https://onj.me/software">Software page</a>.</p>
 
 <h2 id="files-and-storage">Files and Storage</h2>
-<p><code>ElevenLabsMusicGenerator.ini</code> contains preferences. The <code>Music</code> folder is the default output. Generated audio and shared prompts use the chosen output folder; returned details and lyrics use its <code>Lyrics</code> subfolder. The <code>User</code> folder contains the protected API key, prompt and plan drafts, and logs. Keep your music and <code>User</code> folder private when sharing the application.</p>
+<p><code>ElevenLabsMusicGenerator.ini</code> contains preferences. The <code>Music</code> folder is the default output. Generated audio and shared prompts use the chosen output folder; returned details, lyrics, and title-naming batch records use its <code>Lyrics</code> subfolder. The <code>User</code> folder contains the protected API key, prompt and plan drafts, and logs. Keep your music and <code>User</code> folder private when sharing the application.</p>
 
 <h2 id="credits">Credits</h2>
 <p>ElevenLabs Music Generator was developed with Codex under Andre Louis's direction and testing. Music generation is provided by the ElevenLabs Music API and uses the account and credits of the person running the app. The application is free software under the MIT License; <code>LICENSE.txt</code> is included with the download.</p>

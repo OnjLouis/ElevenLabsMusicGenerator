@@ -38,7 +38,7 @@ namespace ElevenLabsMusicGenerator
             SoundEffectSeconds = 5;
             AutomaticSoundEffectDuration = true;
             SoundEffectPromptInfluence = 0.3m;
-            UpdateCheckFrequency = "Never";
+            UpdateCheckFrequency = "Startup";
             InstallUpdatesSilently = false;
             LastUpdateCheckUtc = DateTime.MinValue;
             LastPreferencesTab = 0;

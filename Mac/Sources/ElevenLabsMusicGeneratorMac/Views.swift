@@ -31,14 +31,16 @@ struct MainView: View {
             Text("Prompt").font(.headline)
             KeyboardTextView(text: $model.prompt, editable: true,
                 accessibilityLabel: model.isSoundEffect ? "Sound effects prompt" : "Music prompt",
-                accessibilityHelp: model.isSoundEffect ? "Type or paste a sound effect description." : "Type or paste a music description.",
+                accessibilityHelp: (model.isSoundEffect ? "Type or paste a sound effect description." : "Type or paste a music description.") +
+                    " \(max(0, (model.isSoundEffect ? GenerationRequest.soundEffectsPromptLimit : 4100) - model.prompt.utf16.count)) characters remaining.",
+                maximumLength: model.isSoundEffect ? GenerationRequest.soundEffectsPromptLimit : 4100,
                 onTab: { focus = .baseName },
                 onBackTab: { focusTextView(statusView) },
                 onReady: { promptView = $0 })
                 .frame(minHeight: 160)
-            Text("\(model.prompt.count) of \(model.isSoundEffect ? GenerationRequest.soundEffectsPromptLimit : 4100) characters")
+            Text("\(model.prompt.utf16.count) of \(model.isSoundEffect ? GenerationRequest.soundEffectsPromptLimit : 4100) characters; \(max(0, (model.isSoundEffect ? GenerationRequest.soundEffectsPromptLimit : 4100) - model.prompt.utf16.count)) remaining")
                 .font(.caption)
-                .accessibilityLabel("Prompt character count: \(model.prompt.count) of \(model.isSoundEffect ? GenerationRequest.soundEffectsPromptLimit : 4100)")
+                .accessibilityLabel("Prompt character count: \(model.prompt.utf16.count) of \(model.isSoundEffect ? GenerationRequest.soundEffectsPromptLimit : 4100); \(max(0, (model.isSoundEffect ? GenerationRequest.soundEffectsPromptLimit : 4100) - model.prompt.utf16.count)) remaining")
             HStack(spacing: 16) {
                 VStack(alignment: .leading) {
                     Text("Base filename")
@@ -51,6 +53,8 @@ struct MainView: View {
                 VStack(alignment: .leading) {
                     Text("Length, seconds")
                     if model.isSoundEffect {
+                        Toggle("Automatic duration", isOn: $model.preferences.effects.automaticDuration)
+                            .accessibilityHint("Let ElevenLabs choose a suitable length, up to 30 seconds.")
                         TextField("Length", value: $model.preferences.effects.duration, format: .number)
                             .frame(width: 110)
                             .disabled(model.preferences.effects.automaticDuration || model.isBusy)
@@ -74,8 +78,6 @@ struct MainView: View {
             }
             if model.isSoundEffect {
                 HStack(spacing: 20) {
-                    Toggle("Automatic duration", isOn: $model.preferences.effects.automaticDuration)
-                        .accessibilityHint("Let ElevenLabs choose a suitable length, up to 30 seconds.")
                     Toggle("Loop", isOn: $model.preferences.effects.loop)
                         .accessibilityHint("Generate a sound effect that loops smoothly.")
                     Text("Prompt influence")
@@ -140,13 +142,15 @@ struct MainView: View {
         .alert(item: $model.notice) { item in
             Alert(title: Text(item.title), message: Text(item.message), dismissButton: .default(Text("OK")))
         }
-        .onChange(of: model.preferences.model) { _, value in
+        .onChange(of: model.preferences.model) { oldValue, value in
+            model.modelChanged(from: oldValue, to: value)
             if value == MusicModel.v1.rawValue { model.planEnabled = false }
             if value == MusicModel.soundEffects.rawValue && model.preferences.format.hasPrefix("mp3_48000") {
                 model.preferences.format = AudioFormat.mp3_44100_192.rawValue
                 model.addStatus("Sound Effects selected. Output changed to MP3 44.1 kHz, 192 kbps.")
             }
         }
+        .task { model.checkUpdatesOnLaunch() }
         .onChange(of: model.focusRequest) { _, request in
             guard let request else { return }
             focus = request.control == .model ? .model : .outputFormat
@@ -182,6 +186,10 @@ struct SettingsView: View {
                 }
                 Toggle("Save generated lyrics and details", isOn: $model.preferences.includeDetails)
                     .accessibilityHint("Save returned lyrics and metadata beside the music in a Lyrics folder.")
+                Toggle("Check for updates when the app opens", isOn: Binding(
+                    get: { model.preferences.autoUpdateOnLaunch == true },
+                    set: { model.preferences.autoUpdateOnLaunch = $0 }))
+                    .accessibilityHint("New versions are announced; installation remains your choice.")
                 Text("The folder is created when music or a prompt is first saved.")
                     .foregroundStyle(.secondary)
             }

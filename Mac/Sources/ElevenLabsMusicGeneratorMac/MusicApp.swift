@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 @main
@@ -8,6 +9,8 @@ struct ElevenLabsMusicGeneratorApp: App {
         WindowGroup("ElevenLabs Music and Sound FX Generator") {
             MainView(model: model)
                 .frame(minWidth: 760, minHeight: 700)
+                .onDisappear { model.flushDrafts() }
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in model.flushDrafts() }
         }
         .commands {
             CommandGroup(replacing: .newItem) {

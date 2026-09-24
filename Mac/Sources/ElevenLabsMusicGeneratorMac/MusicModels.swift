@@ -160,6 +160,7 @@ struct GenerationRequest {
     var includeDetails: Bool
     var plan: CompositionPlan?
     var effects = SoundEffectOptions()
+    var useGeneratedTitle = false
 
     var isSoundEffect: Bool { model == .soundEffects }
     func confirmationIntro(pendingCount: Int) -> String {
@@ -170,7 +171,7 @@ struct GenerationRequest {
         let duration = isSoundEffect && effects.automaticDuration ? "Automatic, up to 30 seconds each." : "\(seconds.formatted(.number.precision(.fractionLength(0...3)))) seconds each."
         return "Generate \(pendingCount)\(remaining)\(kind)\(plural)?\nDuration: \(duration)"
     }
-    var endpoint: String { isSoundEffect ? "/v1/sound-generation" : includeDetails ? "/v1/music/detailed" : "/v1/music" }
+    var endpoint: String { isSoundEffect ? "/v1/sound-generation" : (includeDetails || useGeneratedTitle) ? "/v1/music/detailed" : "/v1/music" }
     var payload: [String: Any] {
         if isSoundEffect {
             var body: [String: Any] = ["model_id": model.rawValue, "text": prompt,
@@ -182,7 +183,7 @@ struct GenerationRequest {
         return ["model_id": model.rawValue, "prompt": prompt, "music_length_ms": durationSeconds * 1000, "force_instrumental": instrumental]
     }
 
-    var stem: String { Self.safeStem(baseName.isEmpty ? prompt : baseName) }
+    var stem: String { baseName.isEmpty ? Self.suggestedStem(prompt) : Self.safeStem(baseName) }
     var promptURL: URL { outputFolder.appendingPathComponent(stem + (isSoundEffect ? ".sfx.json" : plan == nil ? ".txt" : ".plan.json")) }
     var sourceData: Data {
         if isSoundEffect {
@@ -199,10 +200,14 @@ struct GenerationRequest {
         return outputFolder.appendingPathComponent("\(stem)\(suffix).\(format.fileExtension)")
     }
 
+    func resolvedOutputURL(_ index: Int) throws -> URL {
+        useGeneratedTitle ? try GeneratedTitleManifest.resolvedOutputURL(self, index: index) : outputURL(index)
+    }
+
     func validate() throws {
         guard (1...10).contains(variations) else { throw MusicError.validation("Choose 1 to 10 variations.") }
         if isSoundEffect {
-            guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, prompt.count <= Self.soundEffectsPromptLimit else { throw MusicError.validation("Enter a sound effects prompt of no more than 450 characters. The prompt has been kept for editing.") }
+            guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, prompt.utf16.count <= Self.soundEffectsPromptLimit else { throw MusicError.validation("Enter a sound effects prompt of no more than 450 characters. The prompt has been kept for editing.") }
             guard effects.duration.isFinite, effects.promptInfluence.isFinite,
                   (0.5...30).contains(effects.duration), (0...1).contains(effects.promptInfluence) else { throw MusicError.validation("Sound effects need 0.5 to 30 seconds and prompt influence between 0 and 1.") }
             guard format == .wav || format == .mp3_44100_128 || format == .mp3_44100_192 else { throw MusicError.validation("Choose a 44.1 kHz WAV or MP3 format for Sound Effects.") }
@@ -212,7 +217,7 @@ struct GenerationRequest {
             guard model != .v1 else { throw MusicError.validation("Plans require Music v2 or v2.5.") }
             try plan.validate()
         } else {
-            guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, prompt.count <= 4100 else {
+            guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, prompt.utf16.count <= 4100 else {
                 throw MusicError.validation("Enter a prompt of no more than 4,100 characters.")
             }
             guard (3...600).contains(durationSeconds) else { throw MusicError.validation("Choose 3 to 600 seconds.") }
@@ -238,10 +243,17 @@ struct GenerationRequest {
     }
 
     static func safeStem(_ value: String) -> String {
-        let ascii = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
-        let words = value.components(separatedBy: ascii.inverted).filter { !$0.isEmpty }
-        let result = words.prefix(8).joined(separator: "_")
-        return String((result.isEmpty ? "ElevenLabs_Music" : result).prefix(80))
+        let forbidden = CharacterSet(charactersIn: "<>:\"/\\|?*").union(.controlCharacters)
+        let words = value.components(separatedBy: forbidden.union(.whitespacesAndNewlines)).filter { !$0.isEmpty }
+        var result = String(words.joined(separator: " ").prefix(80)).trimmingCharacters(in: CharacterSet(charactersIn: " ."))
+        if result.isEmpty { result = "ElevenLabs Music" }
+        let reserved = ["CON", "PRN", "AUX", "NUL"] + (1...9).flatMap { ["COM\($0)", "LPT\($0)"] }
+        if reserved.contains(result.uppercased()) { result += "_" }
+        return result
+    }
+
+    static func suggestedStem(_ prompt: String) -> String {
+        safeStem(prompt.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.prefix(8).joined(separator: " "))
     }
 }
 
@@ -273,6 +285,6 @@ struct FilenameSuggestionState {
     }
 
     private static func suggestion(for prompt: String) -> String {
-        prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : GenerationRequest.safeStem(prompt)
+        prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : GenerationRequest.suggestedStem(prompt)
     }
 }

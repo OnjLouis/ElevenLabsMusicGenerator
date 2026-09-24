@@ -15,11 +15,28 @@ final class TabAwareTextView: NSTextView {
     }
 }
 
+enum PromptInputLimiter {
+    static func replacement(_ text: String, range: NSRange, with proposed: String, limit: Int) -> String? {
+        guard let selection = Range(range, in: text) else { return nil }
+        let available = max(0, limit - text.utf16.count + text[selection].utf16.count)
+        var clipped = ""
+        var used = 0
+        for character in proposed {
+            let size = String(character).utf16.count
+            if used + size > available { break }
+            clipped.append(character)
+            used += size
+        }
+        return clipped == proposed ? nil : clipped
+    }
+}
+
 struct KeyboardTextView: NSViewRepresentable {
     @Binding var text: String
     var editable: Bool
     var accessibilityLabel: String
     var accessibilityHelp: String
+    var maximumLength: Int? = nil
     var onTab: () -> Void
     var onBackTab: () -> Void
     var onReady: (TabAwareTextView) -> Void
@@ -74,8 +91,22 @@ struct KeyboardTextView: NSViewRepresentable {
         var parent: KeyboardTextView
         init(parent: KeyboardTextView) { self.parent = parent }
 
+        func textView(_ textView: NSTextView, shouldChangeTextIn affectedCharRange: NSRange, replacementString: String?) -> Bool {
+            guard parent.editable, let maximumLength = parent.maximumLength, let replacementString,
+                  let clipped = PromptInputLimiter.replacement(textView.string, range: affectedCharRange,
+                      with: replacementString, limit: maximumLength) else { return true }
+            if !clipped.isEmpty { textView.insertText(clipped, replacementRange: affectedCharRange) }
+            return false
+        }
+
         func textDidChange(_ notification: Notification) {
             guard let editor = notification.object as? NSTextView, parent.editable else { return }
+            if let maximumLength = parent.maximumLength, editor.string.utf16.count > maximumLength {
+                let clipped = PromptInputLimiter.replacement("", range: NSRange(location: 0, length: 0), with: editor.string, limit: maximumLength) ?? editor.string
+                let position = min(editor.selectedRange().location, (clipped as NSString).length)
+                editor.string = clipped
+                editor.setSelectedRange(NSRange(location: position, length: 0))
+            }
             parent.text = editor.string
         }
     }

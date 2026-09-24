@@ -92,7 +92,7 @@ namespace ElevenLabsMusicGenerator
             var promptPath = requestData.PromptPath();
             var promptPartPath = promptPath + ".part";
             var multipartPartPath = outputPath + ".multipart.part";
-            var lyricsFolder = Path.Combine(outputFolder, "Lyrics");
+            var lyricsFolder = Path.Combine(requestData.OutputFolder, "Lyrics");
             var sidecarName = Path.GetFileNameWithoutExtension(outputPath);
             var otherAudioExtension = string.Equals(Path.GetExtension(outputPath), ".wav", StringComparison.OrdinalIgnoreCase) ? ".mp3" : ".wav";
             if (File.Exists(Path.ChangeExtension(outputPath, otherAudioExtension))) sidecarName += Path.GetExtension(outputPath);
@@ -113,7 +113,7 @@ namespace ElevenLabsMusicGenerator
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 Report(progress, requestData, variationIndex, outputPath, 0, requestData.IsSoundEffect ? "Requesting a sound effect from ElevenLabs." : "Requesting music from ElevenLabs.");
-                var includeDetails = requestData.IncludeDetails && !requestData.IsSoundEffect;
+                var includeDetails = (requestData.IncludeDetails || requestData.UseGeneratedTitle) && !requestData.IsSoundEffect;
                 var url = apiRoot + (requestData.IsSoundEffect ? "/v1/sound-generation" : includeDetails ? "/v1/music/detailed" : "/v1/music") + "?output_format=" + HttpUtility.UrlEncode(requestData.OutputFormat);
                 var webRequest = CreateRequest(url, "POST");
                 var body = BuildRequestBody(requestData, variationIndex);
@@ -166,26 +166,43 @@ namespace ElevenLabsMusicGenerator
                             DeleteIfExists(pcmPartPath);
                         }
 
+                        if (requestData.UseGeneratedTitle)
+                        {
+                            outputPath = GeneratedTitleManifest.ChooseOutputPath(requestData, details.SongTitle, variationIndex);
+                            sidecarName = Path.GetFileNameWithoutExtension(outputPath);
+                            otherAudioExtension = string.Equals(Path.GetExtension(outputPath), ".wav", StringComparison.OrdinalIgnoreCase) ? ".mp3" : ".wav";
+                            if (File.Exists(Path.ChangeExtension(outputPath, otherAudioExtension))) sidecarName += Path.GetExtension(outputPath);
+                            detailsPath = Path.Combine(lyricsFolder, sidecarName + ".details.json");
+                            lyricsPath = Path.Combine(lyricsFolder, sidecarName + ".txt");
+                            detailsPartPath = detailsPath + ".part";
+                            lyricsPartPath = lyricsPath + ".part";
+                        }
+
                         if (variationIndex == 1)
                             File.WriteAllText(promptPartPath, requestData.SourceText() + Environment.NewLine, new UTF8Encoding(false));
-                        if (details != null)
+                        if (details != null && requestData.IncludeDetails)
                         {
                             Directory.CreateDirectory(lyricsFolder);
                             File.WriteAllText(detailsPartPath, details.MetadataJson + Environment.NewLine, new UTF8Encoding(false));
                             if (!string.IsNullOrWhiteSpace(details.LyricsText))
                                 File.WriteAllText(lyricsPartPath, details.LyricsText + Environment.NewLine, new UTF8Encoding(false));
                         }
-                        if (details != null) ReplaceFile(detailsPartPath, detailsPath);
+                        if (details != null && requestData.IncludeDetails) ReplaceFile(detailsPartPath, detailsPath);
                         var hasLyrics = File.Exists(lyricsPartPath);
                         if (hasLyrics) ReplaceFile(lyricsPartPath, lyricsPath);
+                        if (requestData.UseGeneratedTitle)
+                        {
+                            if (variationIndex == 1) ReplaceFile(promptPartPath, promptPath);
+                            GeneratedTitleManifest.Reserve(requestData, variationIndex, outputPath);
+                        }
                         File.Move(audioPartPath, outputPath);
-                        if (variationIndex == 1) ReplaceFile(promptPartPath, promptPath);
+                        if (variationIndex == 1 && !requestData.UseGeneratedTitle) ReplaceFile(promptPartPath, promptPath);
                         var songId = response.Headers["song-id"] ?? string.Empty;
                         stopwatch.Stop();
                         AppLog.Write("Generated " + Path.GetFileName(outputPath) + "; variation=" + variationIndex + "; bytes=" + received + "; format=" + requestData.OutputFormat + "; model=" + requestData.ModelId + "; elapsed=" + stopwatch.Elapsed.TotalSeconds.ToString("0.0") + "s.");
                         Report(progress, requestData, variationIndex, outputPath, received, variationIndex == 1 ? "Saved generated audio and shared prompt." : "Saved generated audio.");
                         return new GenerationResult { OutputPath = outputPath, PromptPath = promptPath, AudioBytes = received, SongId = songId,
-                            DetailsPath = details == null ? null : detailsPath, LyricsPath = hasLyrics ? lyricsPath : null, Elapsed = stopwatch.Elapsed };
+                            DetailsPath = details == null || !requestData.IncludeDetails ? null : detailsPath, LyricsPath = hasLyrics ? lyricsPath : null, Elapsed = stopwatch.Elapsed };
                     }
                 }
             }

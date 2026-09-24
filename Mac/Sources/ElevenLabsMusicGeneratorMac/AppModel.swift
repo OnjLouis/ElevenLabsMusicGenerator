@@ -16,7 +16,7 @@ struct MainFocusRequest: Equatable {
 
 @MainActor
 final class AppModel: ObservableObject {
-    @Published var prompt: String = DraftStore.loadPrompt() {
+    @Published var prompt: String = "" {
         didSet {
             scheduleDraftSave()
             filename.promptChanged(prompt)
@@ -43,11 +43,24 @@ final class AppModel: ObservableObject {
     private var draftTask: Task<Void, Never>?
     private var pendingRequest: GenerationRequest?
     private var pendingIndices: [Int] = []
+    private var longMusicPrompt: String?
+    private var soundEffectPrompt: String?
+    private var checkedUpdatesOnLaunch = false
+    private var skipNextModelDraftCapture = false
     private let service = MusicService()
 
     init() {
         preferences = AppPreferences.load()
         planEnabled = plan != nil
+        do {
+            let drafts = try DraftStore.loadPrompts(activeEffects: selectedModel == .soundEffects)
+            longMusicPrompt = drafts.music
+            soundEffectPrompt = drafts.soundEffects
+            prompt = selectedModel == .soundEffects ?
+                (PromptInputLimiter.replacement("", range: NSRange(location: 0, length: 0), with: drafts.soundEffects, limit: GenerationRequest.soundEffectsPromptLimit) ?? drafts.soundEffects) : drafts.music
+        } catch {
+            status.append("The saved prompt drafts could not be loaded: \(error.localizedDescription)")
+        }
         filename = FilenameSuggestionState(prompt: prompt)
     }
 
@@ -61,7 +74,10 @@ final class AppModel: ObservableObject {
             alert.addButton(withTitle: "Cancel")
             guard alert.runModal() == .alertFirstButtonReturn else { return }
         }
+        if isSoundEffect { soundEffectPrompt = "" }
+        else { longMusicPrompt = "" }
         prompt = ""
+        saveDrafts()
         filename.reset()
         promptDocument = nil
         plan = nil
@@ -75,6 +91,29 @@ final class AppModel: ObservableObject {
     var selectedFormat: AudioFormat { AudioFormat(rawValue: preferences.format) ?? .wav }
     var isSoundEffect: Bool { selectedModel == .soundEffects }
     var usesPlan: Bool { !isSoundEffect && planEnabled }
+
+    func modelChanged(from oldValue: String, to newValue: String) {
+        guard oldValue != newValue else { return }
+        if skipNextModelDraftCapture {
+            skipNextModelDraftCapture = false
+            return
+        }
+        if oldValue == MusicModel.soundEffects.rawValue {
+            soundEffectPrompt = prompt
+        } else {
+            longMusicPrompt = prompt
+        }
+        if newValue == MusicModel.soundEffects.rawValue {
+            if let saved = soundEffectPrompt {
+                prompt = PromptInputLimiter.replacement("", range: NSRange(location: 0, length: 0), with: saved, limit: GenerationRequest.soundEffectsPromptLimit) ?? saved
+            } else if prompt.utf16.count > GenerationRequest.soundEffectsPromptLimit {
+                prompt = PromptInputLimiter.replacement("", range: NSRange(location: 0, length: 0), with: prompt, limit: GenerationRequest.soundEffectsPromptLimit) ?? prompt
+            }
+        } else if let saved = longMusicPrompt {
+            prompt = saved
+        }
+        flushDrafts()
+    }
 
     func focus(_ control: MainControlFocus) {
         focusRequest = MainFocusRequest(control: control)
@@ -91,12 +130,24 @@ final class AppModel: ObservableObject {
 
     private func scheduleDraftSave() {
         draftTask?.cancel()
-        let text = prompt
         draftTask = Task {
             try? await Task.sleep(for: .milliseconds(600))
             guard !Task.isCancelled else { return }
-            DraftStore.savePrompt(text)
+            saveDrafts()
         }
+    }
+
+    private func saveDrafts() {
+        let drafts = PromptDrafts(
+            music: isSoundEffect ? (longMusicPrompt ?? "") : prompt,
+            soundEffects: isSoundEffect ? prompt : (soundEffectPrompt ?? ""))
+        do { try DraftStore.savePrompts(drafts) }
+        catch { addStatus("Could not save prompt drafts: \(error.localizedDescription)") }
+    }
+
+    func flushDrafts() {
+        draftTask?.cancel()
+        saveDrafts()
     }
 
     func openPrompt() {
@@ -107,14 +158,30 @@ final class AppModel: ObservableObject {
         do {
             if url.lastPathComponent.lowercased().hasSuffix(".sfx.json") {
                 let saved = try GenerationRequest.readSoundEffect(Data(contentsOf: url))
+                guard saved.prompt.utf16.count <= GenerationRequest.soundEffectsPromptLimit else {
+                    throw MusicError.validation("The sound effect prompt exceeds the 450-character limit.")
+                }
+                if !isSoundEffect {
+                    longMusicPrompt = prompt
+                    skipNextModelDraftCapture = true
+                }
                 preferences.model = MusicModel.soundEffects.rawValue
                 preferences.effects = saved.effects
                 preferences.format = saved.format.rawValue
                 prompt = saved.prompt
+                soundEffectPrompt = saved.prompt
                 filename.openedDocument(named: String(url.lastPathComponent.dropLast(9)))
                 promptDocument = nil
             } else {
-                prompt = try String(contentsOf: url, encoding: .utf8)
+                let text = try String(contentsOf: url, encoding: .utf8).trimmingCharacters(in: .newlines)
+                guard text.utf16.count <= 4100 else { throw MusicError.validation("The prompt exceeds the 4100-character Music limit.") }
+                if isSoundEffect && text.utf16.count > GenerationRequest.soundEffectsPromptLimit {
+                    soundEffectPrompt = prompt
+                    longMusicPrompt = text
+                    skipNextModelDraftCapture = true
+                    preferences.model = MusicModel.v25.rawValue
+                }
+                prompt = text
                 filename.openedDocument(named: url.deletingPathExtension().lastPathComponent)
                 promptDocument = url
             }
@@ -202,10 +269,11 @@ final class AppModel: ObservableObject {
     func prepareGeneration() {
         guard !isBusy else { return }
         do {
-            let request = GenerationRequest(prompt: prompt, baseName: baseName, outputFolder: outputURL,
+            var request = GenerationRequest(prompt: prompt, baseName: baseName, outputFolder: outputURL,
                 durationSeconds: preferences.durationSeconds, variations: preferences.variations,
                 instrumental: preferences.instrumental, model: selectedModel, format: selectedFormat,
                 includeDetails: !isSoundEffect && preferences.includeDetails, plan: usesPlan ? plan : nil, effects: preferences.effects)
+            request.useGeneratedTitle = !isSoundEffect && baseName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             if usesPlan && plan == nil { throw MusicError.validation("Create or open a composition plan first.") }
             let indices = try BatchPlanner.pending(request)
             guard !indices.isEmpty else {
@@ -240,7 +308,7 @@ final class AppModel: ObservableObject {
                     addStatus("Generating variation \(index) of \(request.variations).")
                     let result = try await service.generate(request, index: index, key: key)
                     completed.append(result.url)
-                    addStatus("Saved \(result.url.lastPathComponent). Time: \(String(format: "%.1f", result.seconds)) seconds.")
+                    addStatus("Saved \(result.url.lastPathComponent). Generation time: \(String(format: "%.1f", result.seconds)) seconds.")
                 }
                 let summary = "Generation complete. \(completed.count) new track(s) saved to \(request.outputFolder.path)."
                 addStatus(summary)
@@ -293,7 +361,13 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func checkUpdates() {
+    func checkUpdatesOnLaunch() {
+        guard !checkedUpdatesOnLaunch, preferences.autoUpdateOnLaunch == true else { return }
+        checkedUpdatesOnLaunch = true
+        checkUpdates(automatic: true)
+    }
+
+    func checkUpdates(automatic: Bool = false) {
         Task {
             do {
                 let url = URL(string: "https://api.github.com/repos/OnjLouis/ElevenLabsMusicGenerator/releases?per_page=100")!
@@ -305,7 +379,7 @@ final class AppModel: ObservableObject {
                     throw MusicError.response("The release server did not respond.")
                 }
                 if http.statusCode == 404 {
-                    notice = AppNotice(title: "Check for Updates", message: "No published release channel is available yet.")
+                    if !automatic { notice = AppNotice(title: "Check for Updates", message: "No published release channel is available yet.") }
                     return
                 }
                 guard http.statusCode == 200 else {
@@ -315,7 +389,7 @@ final class AppModel: ObservableObject {
                     throw MusicError.response("The app version could not be read.")
                 }
                 guard let release = try ReleaseCatalog.newerMacRelease(in: data, currentVersion: current) else {
-                    notice = AppNotice(title: "Check for Updates", message: "ElevenLabs Music Generator \(current) is up to date.")
+                    if !automatic { notice = AppNotice(title: "Check for Updates", message: "ElevenLabs Music Generator \(current) is up to date.") }
                     return
                 }
                 let alert = NSAlert()
@@ -326,7 +400,10 @@ final class AppModel: ObservableObject {
                 if alert.runModal() == .alertFirstButtonReturn && !NSWorkspace.shared.open(release.page) {
                     throw MusicError.response("Could not open the releases page in your browser.")
                 }
-            } catch { show(error) }
+            } catch {
+                if automatic { addStatus("Automatic update check could not finish: \(error.localizedDescription)") }
+                else { show(error) }
+            }
         }
     }
 

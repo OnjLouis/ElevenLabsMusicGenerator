@@ -19,7 +19,9 @@ namespace ElevenLabsMusicGenerator
         private static readonly string[] ModelIds = { MusicGenerationRequest.SoundEffectsModel, "music_v2_5", "music_v2", "music_v1" };
         private readonly TextBox promptTextBox;
         private readonly Label characterCountLabel;
+        private readonly ToolStripStatusLabel promptCountStatus;
         private readonly Label promptLabel;
+        private readonly FlowLayoutPanel generationOptions;
         private readonly FlowLayoutPanel soundEffectOptions;
         private readonly CheckBox automaticDurationCheckBox;
         private readonly CheckBox loopCheckBox;
@@ -40,6 +42,9 @@ namespace ElevenLabsMusicGenerator
         private string currentPromptPath;
         private bool baseNameIsAutomatic = true;
         private bool changingBaseName;
+        private string longMusicPrompt;
+        private string soundEffectPrompt;
+        private bool? displayedEffectsMode;
         private bool generationRunning;
         private MusicCompositionPlan activePlan;
 
@@ -95,7 +100,7 @@ namespace ElevenLabsMusicGenerator
             promptTextBox.TextChanged += PromptTextChanged;
             root.Controls.Add(promptTextBox, 0, 1);
 
-            var generationOptions = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = true, Padding = new Padding(0, 8, 0, 4) };
+            generationOptions = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = true, Padding = new Padding(0, 8, 0, 4) };
             generationOptions.Controls.Add(new Label { Text = "Mo&del:", AutoSize = true, Anchor = AnchorStyles.Left });
             modelComboBox = new ShortcutComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160, AccessibleName = "Model", AccessibleDescription = "Choose music or sound effects.", ShortcutText = "Alt+D" };
             modelComboBox.Items.AddRange(new object[] { "Sound Effects v2", "Music v2.5", "Music v2", "Music v1" });
@@ -164,6 +169,10 @@ namespace ElevenLabsMusicGenerator
             root.Controls.Add(statusPanel, 0, 5);
 
             Controls.Add(root);
+            var statusStrip = new StatusStrip { AccessibleName = "Status bar" };
+            promptCountStatus = new ToolStripStatusLabel { AccessibleName = "Prompt character count" };
+            statusStrip.Items.Add(promptCountStatus);
+            Controls.Add(statusStrip);
             MainMenuStrip.BringToFront();
             promptLabel.Click += delegate { promptTextBox.Focus(); };
             statusLabel.Click += delegate { statusTextBox.Focus(); };
@@ -338,7 +347,7 @@ namespace ElevenLabsMusicGenerator
         private static string RunStatistics(IEnumerable<GenerationResult> completed, TimeSpan elapsed)
         {
             var tracks = completed.ToArray();
-            var perTrack = tracks.Length == 0 ? string.Empty : Environment.NewLine + "Track times:" + Environment.NewLine +
+            var perTrack = tracks.Length == 0 ? string.Empty : Environment.NewLine + "Generation time per track:" + Environment.NewLine +
                 string.Join(Environment.NewLine, tracks.Select(item => Path.GetFileName(item.OutputPath) + ": " + item.Elapsed.TotalSeconds.ToString("0.0") + " seconds.").ToArray());
             return Environment.NewLine + "Elapsed: " + elapsed.TotalSeconds.ToString("0.0") + " seconds." + perTrack;
         }
@@ -404,6 +413,7 @@ namespace ElevenLabsMusicGenerator
                 Instrumental = !isSoundEffect && !usePlan && instrumentalCheckBox.Checked,
                 Plan = usePlan ? activePlan : null,
                 IncludeDetails = !isSoundEffect && settings.SaveGeneratedDetails,
+                UseGeneratedTitle = !isSoundEffect && baseNameTextBox.Text.Trim().Length == 0,
                 OutputFormat = settings.OutputFormat,
                 ModelId = settings.ModelId,
                 OutputFolder = folder,
@@ -446,6 +456,7 @@ namespace ElevenLabsMusicGenerator
             usePlanCheckBox.Enabled = !running;
             editPlanButton.Enabled = !running;
             soundEffectOptions.Enabled = !running;
+            automaticDurationCheckBox.Enabled = !running;
             baseNameTextBox.ReadOnly = running;
             progressBar.Style = running ? ProgressBarStyle.Marquee : ProgressBarStyle.Continuous;
             if (!running) progressBar.Value = 0;
@@ -468,12 +479,15 @@ namespace ElevenLabsMusicGenerator
         private void NewPrompt()
         {
             if (generationRunning) return;
+            if (settings.ModelId == MusicGenerationRequest.SoundEffectsModel) soundEffectPrompt = string.Empty;
+            else longMusicPrompt = string.Empty;
             promptTextBox.Clear();
             currentPromptPath = null;
             baseNameIsAutomatic = true;
             baseNameTextBox.Clear();
             usePlanCheckBox.Checked = false;
             SetStatus("New prompt.");
+            SaveDraftNonFatal();
             promptTextBox.Focus();
         }
 
@@ -491,29 +505,32 @@ namespace ElevenLabsMusicGenerator
 
         private void LoadInitialPrompt(string initialFile)
         {
-            if (!string.IsNullOrWhiteSpace(initialFile) && File.Exists(initialFile))
-            {
-                LoadPromptFile(initialFile);
-                return;
-            }
-            if (!File.Exists(AppPaths.DraftPath)) return;
             try
             {
-                var draft = File.ReadAllText(AppPaths.DraftPath, Encoding.UTF8);
-                if (draft.Trim().Length == 0) return;
-                promptTextBox.Text = draft.TrimEnd('\r', '\n');
-                SetStatus("Recovered the previous prompt draft.");
+                var effects = settings.ModelId == MusicGenerationRequest.SoundEffectsModel;
+                var drafts = PromptDraftStore.Load(AppPaths.UserFolder, effects);
+                longMusicPrompt = drafts.Music;
+                soundEffectPrompt = drafts.SoundEffects;
+                if (string.IsNullOrWhiteSpace(initialFile) || !File.Exists(initialFile))
+                {
+                    promptTextBox.Text = effects ? soundEffectPrompt : longMusicPrompt;
+                    if (promptTextBox.TextLength > 0) SetStatus("Recovered the previous prompt draft.");
+                }
             }
             catch (Exception ex)
             {
                 AppLog.WriteException("Could not load prompt draft", ex);
+                SetStatus("The saved prompt draft could not be loaded: " + ex.Message);
             }
+            if (!string.IsNullOrWhiteSpace(initialFile) && File.Exists(initialFile)) LoadPromptFile(initialFile);
         }
 
         private void LoadPromptFile(string path)
         {
             try
             {
+                if (settings.ModelId == MusicGenerationRequest.SoundEffectsModel) soundEffectPrompt = null;
+                else longMusicPrompt = null;
                 var text = File.ReadAllText(path, Encoding.UTF8);
                 if (path.EndsWith(".sfx.json", StringComparison.OrdinalIgnoreCase))
                 {
@@ -533,7 +550,18 @@ namespace ElevenLabsMusicGenerator
                     text = IniFile.Load(path).Get("music", "prompt", string.Empty);
                     if (text.Length == 0) throw new InvalidDataException("The INI file does not contain a [music] prompt value.");
                 }
-                promptTextBox.Text = text.TrimEnd('\r', '\n');
+                text = text.TrimEnd('\r', '\n');
+                if (text.Length > 4100) throw new InvalidDataException("The prompt exceeds the 4100-character Music limit.");
+                if (path.EndsWith(".sfx.json", StringComparison.OrdinalIgnoreCase) && text.Length > MusicGenerationRequest.SoundEffectsPromptLimit)
+                    throw new InvalidDataException("The sound effect prompt exceeds the 450-character limit.");
+                if (!path.EndsWith(".sfx.json", StringComparison.OrdinalIgnoreCase) &&
+                    settings.ModelId == MusicGenerationRequest.SoundEffectsModel && text.Length > MusicGenerationRequest.SoundEffectsPromptLimit)
+                {
+                    settings.ModelId = "music_v2_5";
+                    SetGenerationMode();
+                    settings.Save();
+                }
+                promptTextBox.Text = text;
                 currentPromptPath = path;
                 baseNameIsAutomatic = true;
                 changingBaseName = true;
@@ -582,8 +610,10 @@ namespace ElevenLabsMusicGenerator
         {
             try
             {
-                AppPaths.EnsureUserFolders();
-                File.WriteAllText(AppPaths.DraftPath, promptTextBox.Text, new UTF8Encoding(false));
+                PromptDraftStore.Save(AppPaths.UserFolder, new PromptDrafts {
+                    Music = settings.ModelId == MusicGenerationRequest.SoundEffectsModel ? longMusicPrompt : promptTextBox.Text,
+                    SoundEffects = settings.ModelId == MusicGenerationRequest.SoundEffectsModel ? promptTextBox.Text : soundEffectPrompt
+                });
             }
             catch (Exception ex)
             {
@@ -676,9 +706,39 @@ namespace ElevenLabsMusicGenerator
             try { modelComboBox.SelectedIndex = Array.IndexOf(ModelIds, AppSettings.NormalizeModel(settings.ModelId)); }
             finally { updatingModelSelection = false; }
             var effects = settings.ModelId == MusicGenerationRequest.SoundEffectsModel;
+            var switchingMode = displayedEffectsMode.HasValue && displayedEffectsMode.Value != effects;
             promptLabel.Text = effects ? "Sound effects pro&mpt:" : "&Music prompt:";
             promptTextBox.AccessibleName = effects ? "Sound effects prompt" : "Music prompt";
             promptTextBox.AccessibleDescription = effects ? "Describe the sound effect to generate." : "Describe the music to generate.";
+            if (effects)
+            {
+                if (switchingMode && soundEffectPrompt != null)
+                    promptTextBox.Text = soundEffectPrompt.Length > MusicGenerationRequest.SoundEffectsPromptLimit ?
+                        soundEffectPrompt.Substring(0, MusicGenerationRequest.SoundEffectsPromptLimit) : soundEffectPrompt;
+                else if (promptTextBox.TextLength > MusicGenerationRequest.SoundEffectsPromptLimit)
+                {
+                    longMusicPrompt = promptTextBox.Text;
+                    promptTextBox.Text = promptTextBox.Text.Substring(0, MusicGenerationRequest.SoundEffectsPromptLimit);
+                }
+                promptTextBox.MaxLength = MusicGenerationRequest.SoundEffectsPromptLimit;
+                if (automaticDurationCheckBox.Parent != generationOptions)
+                {
+                    generationOptions.Controls.Add(automaticDurationCheckBox);
+                    generationOptions.Controls.SetChildIndex(automaticDurationCheckBox, 2);
+                }
+                automaticDurationCheckBox.TabIndex = modelComboBox.TabIndex + 1;
+                lengthNumeric.TabIndex = automaticDurationCheckBox.TabIndex + 1;
+            }
+            else
+            {
+                promptTextBox.MaxLength = 4100;
+                if (switchingMode && longMusicPrompt != null) promptTextBox.Text = longMusicPrompt;
+                if (automaticDurationCheckBox.Parent != soundEffectOptions)
+                {
+                    soundEffectOptions.Controls.Add(automaticDurationCheckBox);
+                    soundEffectOptions.Controls.SetChildIndex(automaticDurationCheckBox, 0);
+                }
+            }
             UpdatePromptCount();
             soundEffectOptions.Visible = effects;
             lengthNumeric.Minimum = 0.5m;
@@ -688,13 +748,17 @@ namespace ElevenLabsMusicGenerator
             lengthNumeric.Maximum = effects ? 30 : 600;
             lengthNumeric.DecimalPlaces = effects ? 1 : 0;
             lengthNumeric.Increment = effects ? 0.5m : 1;
+            displayedEffectsMode = effects;
             SetPlanMode();
         }
 
         private void UpdatePromptCount()
         {
             var limit = settings.ModelId == MusicGenerationRequest.SoundEffectsModel ? MusicGenerationRequest.SoundEffectsPromptLimit : 4100;
-            characterCountLabel.Text = promptTextBox.TextLength + " of " + limit + " characters";
+            characterCountLabel.Text = promptTextBox.TextLength + " of " + limit + " characters; " + Math.Max(0, limit - promptTextBox.TextLength) + " remaining";
+            promptCountStatus.Text = characterCountLabel.Text;
+            promptTextBox.AccessibleDescription = "Describe the " + (settings.ModelId == MusicGenerationRequest.SoundEffectsModel ? "sound effect" : "music") +
+                " to generate. " + characterCountLabel.Text + ".";
         }
 
         private void SaveGenerationSettings()
@@ -710,6 +774,8 @@ namespace ElevenLabsMusicGenerator
         {
             if (updatingModelSelection || generationRunning || modelComboBox.SelectedIndex < 0) return;
             SaveGenerationSettings();
+            if (settings.ModelId == MusicGenerationRequest.SoundEffectsModel) soundEffectPrompt = promptTextBox.Text;
+            else longMusicPrompt = promptTextBox.Text;
             settings.ModelId = ModelIds[modelComboBox.SelectedIndex];
             var formatChanged = settings.ModelId == MusicGenerationRequest.SoundEffectsModel && settings.OutputFormat.StartsWith("mp3_48000", StringComparison.Ordinal);
             if (formatChanged) settings.OutputFormat = "mp3_44100_192";

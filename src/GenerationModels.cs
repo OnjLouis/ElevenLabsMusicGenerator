@@ -25,6 +25,7 @@ namespace ElevenLabsMusicGenerator
         public int? Seed { get; set; }
         public MusicCompositionPlan Plan { get; set; }
         public bool IncludeDetails { get; set; }
+        public bool UseGeneratedTitle { get; set; }
         public string OutputFolder { get; set; }
         public string BaseName { get; set; }
 
@@ -42,8 +43,9 @@ namespace ElevenLabsMusicGenerator
             var extension = OutputFormat.StartsWith("pcm_", StringComparison.OrdinalIgnoreCase) ? ".wav" :
                 OutputFormat.StartsWith("mp3_", StringComparison.OrdinalIgnoreCase) ? ".mp3" : ".audio";
             var stem = FileNameHelper.SafeStem(BaseName, Prompt);
-            if (Variations <= 1) return new[] { Path.Combine(OutputFolder, stem + extension) };
-            return Enumerable.Range(1, Variations).Select(index => Path.Combine(OutputFolder, stem + "_v" + index + extension)).ToList();
+            return Enumerable.Range(1, Variations).Select(index =>
+                UseGeneratedTitle ? GeneratedTitleManifest.ResolvedOutputPath(this, index) :
+                Path.Combine(OutputFolder, stem + (Variations == 1 ? string.Empty : "_v" + index) + extension)).ToList();
         }
 
         public string PromptPath()
@@ -76,16 +78,22 @@ namespace ElevenLabsMusicGenerator
 
     internal static class FileNameHelper
     {
-        private static readonly Regex InvalidCharacters = new Regex("[^A-Za-z0-9]+", RegexOptions.Compiled);
+        private static readonly Regex InvalidCharacters = new Regex("[\\x00-\\x1F<>:\"/\\\\|?*]", RegexOptions.Compiled);
+        private static readonly Regex ReservedName = new Regex("^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\\..*)?$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         public static string SafeStem(string requestedName, string prompt)
         {
-            var source = string.IsNullOrWhiteSpace(requestedName) ? prompt : requestedName;
-            var words = InvalidCharacters.Replace(source ?? string.Empty, " ").Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-            var stem = string.Join("_", words.Take(8).ToArray());
-            if (stem.Length == 0) stem = "ElevenLabs_Music";
-            if (stem.Length > 80) stem = stem.Substring(0, 80);
-            return stem.TrimEnd('.', ' ');
+            var automatic = string.IsNullOrWhiteSpace(requestedName);
+            var source = automatic ? prompt : requestedName;
+            var cleaned = Regex.Replace(InvalidCharacters.Replace(source ?? string.Empty, " "), "\\s+", " ").Trim().TrimEnd('.');
+            if (automatic) cleaned = string.Join(" ", cleaned.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).Take(8).ToArray());
+            if (cleaned.Length > 80)
+            {
+                var end = char.IsHighSurrogate(cleaned[79]) ? 79 : 80;
+                cleaned = cleaned.Substring(0, end).TrimEnd(' ', '.');
+            }
+            if (cleaned.Length == 0) cleaned = "ElevenLabs Music";
+            return ReservedName.IsMatch(cleaned) ? cleaned + "_" : cleaned;
         }
     }
 

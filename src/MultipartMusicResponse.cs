@@ -12,6 +12,22 @@ namespace ElevenLabsMusicGenerator
     {
         public string MetadataJson { get; private set; }
         public string LyricsText { get; private set; }
+        public string SongTitle
+        {
+            get
+            {
+                if (string.IsNullOrWhiteSpace(MetadataJson)) return string.Empty;
+                try
+                {
+                    var data = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(MetadataJson);
+                    object value;
+                    if (data == null || !data.TryGetValue("song_metadata", out value)) return string.Empty;
+                    var metadata = value as Dictionary<string, object>;
+                    return metadata != null && metadata.TryGetValue("title", out value) ? Convert.ToString(value).Trim() : string.Empty;
+                }
+                catch { return string.Empty; }
+            }
+        }
 
         public static MultipartMusicResponse Extract(string multipartPath, string contentType, string audioPath)
         {

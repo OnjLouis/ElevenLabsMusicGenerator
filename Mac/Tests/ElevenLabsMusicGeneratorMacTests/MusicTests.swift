@@ -3,6 +3,30 @@ import XCTest
 @testable import ElevenLabsMusicGeneratorMac
 
 final class MusicTests: XCTestCase {
+    func testPromptDraftMigrationAndRoundTrip() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("elevenlabs-drafts-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try Data("Current effect".utf8).write(to: folder.appendingPathComponent("Prompt Draft.txt"))
+        try Data("Saved music".utf8).write(to: folder.appendingPathComponent("Music Prompt Draft.txt"))
+        try Data("Old effect".utf8).write(to: folder.appendingPathComponent("Sound Effects Prompt Draft.txt"))
+        var drafts = try DraftStore.loadPrompts(activeEffects: true, from: folder)
+        XCTAssertEqual(drafts.music, "Saved music")
+        XCTAssertEqual(drafts.soundEffects, "Current effect")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: folder.appendingPathComponent("Prompt Drafts.json").path))
+        for name in ["Prompt Draft.txt", "Music Prompt Draft.txt", "Sound Effects Prompt Draft.txt"] {
+            XCTAssertFalse(FileManager.default.fileExists(atPath: folder.appendingPathComponent(name).path))
+        }
+        drafts.music = "Edited music"
+        drafts.soundEffects = "Edited effect"
+        try DraftStore.savePrompts(drafts, to: folder)
+        XCTAssertEqual(try DraftStore.loadPrompts(activeEffects: false, from: folder), drafts)
+        try Data("{bad json".utf8).write(to: folder.appendingPathComponent("Prompt Drafts.json"))
+        try Data("Keep this".utf8).write(to: folder.appendingPathComponent("Prompt Draft.txt"))
+        XCTAssertThrowsError(try DraftStore.savePrompts(drafts, to: folder))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: folder.appendingPathComponent("Prompt Draft.txt").path))
+    }
+
     func testModelDisplayOrder() {
         XCTAssertEqual(MusicModel.allCases, [.soundEffects, .v25, .v2, .v1])
         XCTAssertEqual(AppPreferences().model, MusicModel.v25.rawValue)
@@ -106,18 +130,43 @@ final class MusicTests: XCTestCase {
 
     func testVisibleFilenameTracksPromptUntilEdited() {
         var filename = FilenameSuggestionState(prompt: "Gentle piano with soft strings")
-        XCTAssertEqual(filename.value, "Gentle_piano_with_soft_strings")
+        XCTAssertEqual(filename.value, "Gentle piano with soft strings")
         filename.promptChanged("Bright jazz piano")
-        XCTAssertEqual(filename.value, "Bright_jazz_piano")
+        XCTAssertEqual(filename.value, "Bright jazz piano")
         filename.userChanged("My own title")
         filename.promptChanged("A completely different prompt")
         XCTAssertEqual(filename.value, "My own title")
         filename.reset()
         XCTAssertEqual(filename.value, "")
         filename.promptChanged("Fresh start")
-        XCTAssertEqual(filename.value, "Fresh_start")
+        XCTAssertEqual(filename.value, "Fresh start")
         filename.openedDocument(named: "Saved Song")
         XCTAssertEqual(filename.value, "Saved Song")
+    }
+
+    func testSafeFilenameKeepsSpaces() {
+        XCTAssertEqual(GenerationRequest.safeStem("My new track"), "My new track")
+        XCTAssertEqual(GenerationRequest.safeStem(" My: new / track? "), "My new track")
+        XCTAssertNotEqual(GenerationRequest.safeStem("CON"), "CON")
+    }
+
+    func testPromptPasteDoesNotDeleteExistingTail() {
+        XCTAssertEqual(PromptInputLimiter.replacement("abcXYZ", range: NSRange(location: 3, length: 0),
+            with: "12345", limit: 8), "12")
+        XCTAssertNil(PromptInputLimiter.replacement("abcXYZ", range: NSRange(location: 3, length: 0),
+            with: "12", limit: 8))
+        XCTAssertEqual(PromptInputLimiter.replacement("abcXYZ", range: NSRange(location: 3, length: 3),
+            with: "123456", limit: 8), "12345")
+        XCTAssertEqual(PromptInputLimiter.replacement("abc", range: NSRange(location: 3, length: 0),
+            with: "🙂x", limit: 4), "")
+        XCTAssertEqual(PromptInputLimiter.replacement("abc", range: NSRange(location: 3, length: 0),
+            with: "🙂x", limit: 5), "🙂")
+    }
+
+    func testNewPreferencesEnableStartupChecks() throws {
+        XCTAssertEqual(AppPreferences().autoUpdateOnLaunch, true)
+        let old = #"{"outputFolder":"/tmp/Music","durationSeconds":60,"variations":2,"instrumental":false,"model":"music_v2_5","format":"pcm_44100","includeDetails":true}"#
+        XCTAssertNil(try JSONDecoder().decode(AppPreferences.self, from: Data(old.utf8)).autoUpdateOnLaunch)
     }
 
     func testKeyUsesNoCreditMusicPlanEndpoint() async throws {
@@ -250,6 +299,48 @@ final class MusicTests: XCTestCase {
         XCTAssertTrue(try String(contentsOf: result.lyricsURL!).contains("Hello world"))
         let names = try FileManager.default.contentsOfDirectory(atPath: folder.path)
         XCTAssertFalse(names.contains(where: { $0.contains(".part") }))
+    }
+
+    func testReturnedTitleNamesAudioAndResumes() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder); StubProtocol.reply = nil }
+        let fixture = "--abc\r\nContent-Type: audio/mpeg\r\n\r\nID3" + String(repeating: "A", count: 200) + "\r\n--abc\r\nContent-Type: application/json\r\n\r\n{\"song_metadata\":{\"title\":\"Returned Song\"}}\r\n--abc--\r\n"
+        StubProtocol.reply = { request in
+            XCTAssertEqual(request.url?.path, "/v1/music/detailed")
+            return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil,
+                headerFields: ["Content-Type": "multipart/mixed; boundary=abc"])!, Data(fixture.utf8))
+        }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StubProtocol.self]
+        let service = MusicService(session: URLSession(configuration: configuration))
+        var request = GenerationRequest(prompt: "A piano song", baseName: "", outputFolder: folder,
+            durationSeconds: 10, variations: 2, instrumental: false, model: .v25,
+            format: .mp3_44100_128, includeDetails: false, plan: nil)
+        request.useGeneratedTitle = true
+        let result = try await service.generate(request, index: 1, key: "fake-key")
+        XCTAssertEqual(result.url.lastPathComponent, "01 - Returned Song.mp3")
+        XCTAssertNil(result.detailsURL)
+        XCTAssertEqual(try BatchPlanner.pending(request), [2])
+        var wavRequest = request
+        wavRequest.format = .wav
+        XCTAssertNotEqual(try request.resolvedOutputURL(1), try wavRequest.resolvedOutputURL(1))
+        let wavOutput = try GeneratedTitleManifest.chooseOutputURL(wavRequest, title: "Returned Song", index: 1)
+        try GeneratedTitleManifest.reserve(wavRequest, index: 1, output: wavOutput)
+        XCTAssertEqual(try request.resolvedOutputURL(1), result.url)
+        XCTAssertEqual(try wavRequest.resolvedOutputURL(1), wavOutput)
+        let second = try GeneratedTitleManifest.chooseOutputURL(request, title: "Returned Song", index: 2)
+        XCTAssertEqual(second.lastPathComponent, "02 - Returned Song.mp3")
+        var single = request
+        single.prompt = "Single track"
+        single.variations = 1
+        let collision = try GeneratedTitleManifest.chooseOutputURL(single, title: "Returned Song", index: 1)
+        XCTAssertEqual(collision.lastPathComponent, "01 - Returned Song (2).mp3")
+        var older = request
+        older.prompt = "Older batch"
+        let olderURL = folder.appendingPathComponent("Older song_v1.mp3")
+        try GeneratedTitleManifest.reserve(older, index: 1, output: olderURL)
+        XCTAssertEqual(try older.resolvedOutputURL(1), olderURL)
     }
 
     func testSoundEffectGenerationAndAutomaticResume() async throws {

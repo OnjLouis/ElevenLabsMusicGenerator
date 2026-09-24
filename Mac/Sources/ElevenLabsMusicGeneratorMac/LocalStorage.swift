@@ -10,6 +10,7 @@ struct AppPreferences: Codable {
     var model = MusicModel.v25.rawValue
     var format = AudioFormat.wav.rawValue
     var includeDetails = true
+    var autoUpdateOnLaunch: Bool? = true
     var soundEffects: SoundEffectOptions?
     var effects: SoundEffectOptions {
         get { soundEffects ?? SoundEffectOptions() }
@@ -73,19 +74,61 @@ enum KeychainStore {
     }
 }
 
+struct PromptDrafts: Codable, Equatable {
+    let version: Int
+    var music: String
+    var soundEffects: String
+
+    init(music: String = "", soundEffects: String = "") {
+        version = 1
+        self.music = music
+        self.soundEffects = soundEffects
+    }
+}
+
 enum DraftStore {
     private static var folder: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("ElevenLabs Music Generator", isDirectory: true)
     }
 
-    static func loadPrompt() -> String {
-        (try? String(contentsOf: folder.appendingPathComponent("Prompt Draft.txt"), encoding: .utf8)) ?? ""
+    static func loadPrompts(activeEffects: Bool, from directory: URL? = nil) throws -> PromptDrafts {
+        let directory = directory ?? folder
+        let path = directory.appendingPathComponent("Prompt Drafts.json")
+        if FileManager.default.fileExists(atPath: path.path) { return try readPrompts(at: path) }
+        let active = try readLegacy("Prompt Draft.txt", from: directory)
+        let music = try readLegacy("Music Prompt Draft.txt", from: directory)
+        let effects = try readLegacy("Sound Effects Prompt Draft.txt", from: directory)
+        let drafts = PromptDrafts(
+            music: activeEffects ? (music ?? "") : (active ?? music ?? ""),
+            soundEffects: activeEffects ? (active ?? effects ?? "") : (effects ?? ""))
+        if active != nil || music != nil || effects != nil { try savePrompts(drafts, to: directory) }
+        return drafts
     }
 
-    static func savePrompt(_ text: String) {
-        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        try? Data(text.utf8).write(to: folder.appendingPathComponent("Prompt Draft.txt"), options: .atomic)
+    static func savePrompts(_ drafts: PromptDrafts, to directory: URL? = nil) throws {
+        let directory = directory ?? folder
+        let path = directory.appendingPathComponent("Prompt Drafts.json")
+        if FileManager.default.fileExists(atPath: path.path) { _ = try readPrompts(at: path) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try JSONEncoder().encode(drafts).write(to: path, options: .atomic)
+        guard try readPrompts(at: path) == drafts else {
+            throw MusicError.response("The saved prompt drafts did not match the edited text.")
+        }
+        for name in ["Prompt Draft.txt", "Music Prompt Draft.txt", "Sound Effects Prompt Draft.txt"] {
+            try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
+        }
+    }
+
+    private static func readLegacy(_ name: String, from directory: URL) throws -> String? {
+        let path = directory.appendingPathComponent(name)
+        return FileManager.default.fileExists(atPath: path.path) ? try String(contentsOf: path, encoding: .utf8) : nil
+    }
+
+    private static func readPrompts(at path: URL) throws -> PromptDrafts {
+        let drafts = try JSONDecoder().decode(PromptDrafts.self, from: Data(contentsOf: path))
+        guard drafts.version == 1 else { throw MusicError.response("The prompt drafts file uses an unsupported format.") }
+        return drafts
     }
 
     static func loadPlan() -> CompositionPlan? {
@@ -105,13 +148,14 @@ enum BatchPlanner {
     static func pending(_ request: GenerationRequest) throws -> [Int] {
         try request.validate()
         let fm = FileManager.default
-        let existing = (1...request.variations).filter { fm.fileExists(atPath: request.outputURL($0).path) }
+        let paths = try (1...request.variations).map { try request.resolvedOutputURL($0) }
+        let existing = (1...request.variations).filter { fm.fileExists(atPath: paths[$0 - 1].path) }
         if !existing.isEmpty {
             guard let source = try? Data(contentsOf: request.promptURL), source == request.sourceData else {
                 throw MusicError.validation("Existing tracks cannot be resumed because their saved prompt or plan does not match. Choose a new base filename.")
             }
             for index in existing {
-                let url = request.outputURL(index)
+                let url = paths[index - 1]
                 let data = try Data(contentsOf: url, options: .mappedIfSafe)
                 guard matchesAudio(data, request: request) else {
                     throw MusicError.validation("Existing track \(url.lastPathComponent) does not match the selected format. Choose a new base filename.")

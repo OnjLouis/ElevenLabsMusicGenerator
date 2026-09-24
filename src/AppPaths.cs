@@ -19,7 +19,6 @@ namespace ElevenLabsMusicGenerator
         public static string LegacyApiKeyPath { get { return Path.Combine(UserFolder, "ApiKey.txt"); } }
         public static string ApiKeyLoadMessage { get; private set; }
         private static readonly string KeyScope = CreateKeyScope();
-        public static string DraftPath { get { return Path.Combine(UserFolder, "Prompt draft.txt"); } }
         public static string PlanDraftPath { get { return Path.Combine(UserFolder, "Composition draft.json"); } }
         public static string LogFolder { get { return Path.Combine(UserFolder, "Logs"); } }
         public static string LogPath { get { return Path.Combine(LogFolder, "Latest.log"); } }

@@ -36,6 +36,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 Run("Sound effects model and request", TestSoundEffectsRequest);
                 Run("Sound effects generation and safe resume", TestSoundEffectsGeneration);
                 Run("Sound effects mode preserves music settings", TestSoundEffectsModeSwitch);
+                Run("Prompt drafts migrate and round trip", TestPromptDraftMigration);
                 Run("Main model selector and persistence", TestMainModelSelector);
                 Run("Fresh and resumed confirmation wording", TestConfirmationWording);
                 Run("Portable music folder default", TestPortableMusicFolderDefault);
@@ -47,6 +48,9 @@ namespace ElevenLabsMusicGenerator.Tests
                 Run("Foreign protected key is preserved", TestForeignProtectedKeyIsPreserved);
                 Run("Readable per-track timing", TestReadableRunStatistics);
                 Run("Output naming", TestOutputNaming);
+                Run("Filename spaces and reserved names", TestFilenameSpaces);
+                Run("New installs check for updates", TestNewInstallUpdateDefault);
+                Run("Returned title naming and resume", TestReturnedTitleNaming);
                 Run("Mock PCM generation", TestMockPcmGeneration);
                 Run("Existing audio is never overwritten", TestExistingAudioIsNeverOverwritten);
                 Run("Shared prompt for variations", TestSharedPromptForVariations);
@@ -67,6 +71,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 Run("Music API key test uses plan endpoint", TestMusicApiKeyRequest);
                 Run("Composition plan request and resume", TestCompositionPlanRequest);
                 Run("Detailed response audio and lyrics", TestDetailedResponse);
+                Run("Detailed response names music from returned title", TestDetailedResponseTitle);
                 Run("Detailed response avoids cross-format sidecar collisions", TestDetailedResponseFormatCollision);
                 Run("Updater arguments", TestUpdaterArguments);
                 Run("Invalid update signature rejection", TestInvalidUpdateSignature);
@@ -159,17 +164,82 @@ namespace ElevenLabsMusicGenerator.Tests
                 method.Invoke(form, null);
                 var prompt = (TextBox)typeof(MainForm).GetField("promptTextBox", flags).GetValue(form);
                 var counter = (Label)typeof(MainForm).GetField("characterCountLabel", flags).GetValue(form);
+                settings.ModelId = "music_v2_5";
+                method.Invoke(form, null);
                 prompt.Text = new string('a', 451);
-                Assert(counter.Text == "451 of 450 characters", "Sound Effects must show its own prompt limit without discarding the prompt.");
+                settings.ModelId = MusicGenerationRequest.SoundEffectsModel;
+                method.Invoke(form, null);
+                Assert(prompt.TextLength == 450 && prompt.MaxLength == 450, "Sound Effects must cap visible input at 450 characters.");
+                Assert(counter.Text.Contains("0 remaining"), "The count must show remaining characters.");
+                var statusCount = (ToolStripStatusLabel)typeof(MainForm).GetField("promptCountStatus", flags).GetValue(form);
+                Assert(statusCount.Text == counter.Text && prompt.AccessibleDescription.Contains("0 remaining"), "Screen readers must be able to find the active prompt count.");
+                var automatic = (CheckBox)typeof(MainForm).GetField("automaticDurationCheckBox", flags).GetValue(form);
+                var options = (FlowLayoutPanel)typeof(MainForm).GetField("generationOptions", flags).GetValue(form);
+                Assert(automatic.Parent == options && options.Controls.IndexOf(automatic) + 1 == options.Controls.IndexOf(length.Parent.Controls.OfType<Label>().First(c => c.Text.Contains("Length in seconds"))), "Automatic duration must precede Length in the same tab container.");
+                automatic.Checked = false;
+                var next = form.GetNextControl(automatic, true);
+                while (next != null && !next.TabStop) next = form.GetNextControl(next, true);
+                Assert(next == length, "Tab must move from Automatic duration to Length when fixed duration is selected; got " + (next == null ? "null" : next.GetType().Name + " " + next.AccessibleName));
+                automatic.Checked = true;
                 Assert(length.Value == 2.5m && !length.Enabled, "Automatic effects duration must disable the duration field.");
                 var instrumental = (CheckBox)typeof(MainForm).GetField("instrumentalCheckBox", flags).GetValue(form);
                 Assert(!instrumental.Enabled, "Effects must disable the music instrumental option.");
                 settings.ModelId = "music_v2_5";
                 method.Invoke(form, null);
-                Assert(counter.Text == "451 of 4100 characters" && prompt.TextLength == 451, "Switching back to Music must keep the full prompt.");
+                Assert(counter.Text.Contains("451 of 4100 characters") && prompt.TextLength == 451 && prompt.MaxLength == 4100, "Switching back to Music must keep the full prompt.");
                 Assert(length.Value == 120 && length.Enabled && instrumental.Enabled, "Returning to Music must restore its duration and controls.");
+                var model = (ComboBox)typeof(MainForm).GetField("modelComboBox", flags).GetValue(form);
+                model.SelectedIndex = 0;
+                prompt.Text = "A wooden door closes";
+                model.SelectedIndex = 1;
+                Assert(prompt.TextLength == 451, "Returning to Music must restore its draft after editing the effect.");
+                model.SelectedIndex = 0;
+                Assert(prompt.Text == "A wooden door closes", "Returning to Sound Effects must restore its edited draft.");
+                model.SelectedIndex = 1;
+                prompt.Text = "Edited current music";
+                method.Invoke(form, null);
+                Assert(prompt.Text == "Edited current music", "Refreshing the same mode must not replace a new prompt with an older draft.");
+                model.SelectedIndex = 0;
+                var importedPrompt = Path.Combine(AppPaths.AppFolder, "long-music-import.txt");
+                try
+                {
+                    File.WriteAllText(importedPrompt, new string('m', 451), Encoding.UTF8);
+                    typeof(MainForm).GetMethod("LoadPromptFile", flags).Invoke(form, new object[] { importedPrompt });
+                    Assert(settings.ModelId == "music_v2_5" && prompt.TextLength == 451,
+                        "Opening a long text prompt from Sound Effects must preserve all text by selecting Music.");
+                }
+                finally { if (File.Exists(importedPrompt)) File.Delete(importedPrompt); }
             }
             new AppSettings().Save();
+        }
+
+        private static void TestPromptDraftMigration()
+        {
+            var folder = Path.Combine(AppPaths.AppFolder, "draft-migration-test");
+            Directory.CreateDirectory(folder);
+            try
+            {
+                File.WriteAllText(Path.Combine(folder, "Prompt draft.txt"), "Current effect", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(folder, "Music prompt draft.txt"), "Saved music", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(folder, "Sound effects prompt draft.txt"), "Old effect", Encoding.UTF8);
+                var drafts = PromptDraftStore.Load(folder, true);
+                Assert(drafts.Music == "Saved music" && drafts.SoundEffects == "Current effect", "Migration must keep both modes and prefer the active draft.");
+                Assert(File.Exists(Path.Combine(folder, "Prompt drafts.json")) && !File.Exists(Path.Combine(folder, "Prompt draft.txt")) &&
+                    !File.Exists(Path.Combine(folder, "Music prompt draft.txt")) && !File.Exists(Path.Combine(folder, "Sound effects prompt draft.txt")),
+                    "Legacy text drafts must be removed after verified JSON migration.");
+                drafts.Music = "Edited music";
+                drafts.SoundEffects = "Edited effect";
+                PromptDraftStore.Save(folder, drafts);
+                var restored = PromptDraftStore.Load(folder, false);
+                Assert(restored.Music == drafts.Music && restored.SoundEffects == drafts.SoundEffects, "Both prompt modes must round trip together.");
+                File.WriteAllText(Path.Combine(folder, "Prompt drafts.json"), "{bad json", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(folder, "Prompt draft.txt"), "Do not delete", Encoding.UTF8);
+                var rejected = false;
+                try { PromptDraftStore.Save(folder, drafts); }
+                catch { rejected = true; }
+                Assert(rejected && File.Exists(Path.Combine(folder, "Prompt draft.txt")), "A damaged JSON file must not cause deletion of a legacy draft.");
+            }
+            finally { Directory.Delete(folder, true); }
         }
 
         private static void TestSoundEffectsRequest()
@@ -477,7 +547,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 new GenerationResult { OutputPath = "second.wav", Elapsed = TimeSpan.FromSeconds(22.6) }
             };
             var status = (string)method.Invoke(null, new object[] { tracks, TimeSpan.FromSeconds(42) });
-            Assert(status.Contains("Track times:" + Environment.NewLine + "first.wav:"), "The first track is not on its own line.");
+            Assert(status.Contains("Generation time per track:" + Environment.NewLine + "first.wav:"), "The first track is not on its own line.");
             Assert(status.Contains(Environment.NewLine + "second.wav:"), "The second track is not on its own line.");
             Assert(!status.Contains("Credit charge:"), "Unavailable credit information is still in the status log.");
         }
@@ -494,8 +564,60 @@ namespace ElevenLabsMusicGenerator.Tests
             };
             var paths = request.OutputPaths();
             Assert(paths.Count == 2, "Variation count is wrong.");
-            Assert(paths[0].EndsWith("Bright_synth_pop_with_clean_drums_and_bass_v1.wav", StringComparison.Ordinal), "First output name is wrong: " + paths[0]);
+            Assert(paths[0].EndsWith("Bright synth pop with clean drums and bass_v1.wav", StringComparison.Ordinal), "First output name is wrong: " + paths[0]);
             Assert(paths[1].EndsWith("_v2.wav", StringComparison.Ordinal), "Second output suffix is wrong.");
+        }
+
+        private static void TestFilenameSpaces()
+        {
+            Assert(FileNameHelper.SafeStem("My new track", "ignored") == "My new track", "Typed spaces must survive sanitization.");
+            Assert(FileNameHelper.SafeStem("  My: new / track?  ", "ignored") == "My new track", "Only unsafe filename characters should be removed.");
+            Assert(FileNameHelper.SafeStem("CON", "ignored") != "CON", "Windows reserved device names must not be emitted.");
+            var unicode = FileNameHelper.SafeStem(new string('x', 79) + "\U0001F642", "ignored");
+            Assert(!char.IsHighSurrogate(unicode[unicode.Length - 1]), "Truncating a filename must not split a Unicode character.");
+        }
+
+        private static void TestNewInstallUpdateDefault()
+        {
+            Assert(new AppSettings().UpdateCheckFrequency == "Startup", "New installs should check for updates at startup.");
+        }
+
+        private static void TestReturnedTitleNaming()
+        {
+            var folder = Path.Combine(AppPaths.AppFolder, "Titled Output");
+            Directory.CreateDirectory(folder);
+            var request = new MusicGenerationRequest { Prompt = "A piano song", BaseName = "", OutputFolder = folder,
+                ModelId = "music_v2_5", OutputFormat = "pcm_44100", LengthSeconds = 3, Variations = 2, UseGeneratedTitle = true };
+            Assert(Path.GetDirectoryName(request.OutputPaths()[0]) == Path.Combine(folder, "Lyrics"), "Title mode must not treat old prompt-named audio as a completed batch.");
+            var first = GeneratedTitleManifest.ChooseOutputPath(request, "A new song", 1);
+            Assert(Path.GetFileName(first) == "01 - A new song.wav", "Returned song title was not numbered.");
+            File.WriteAllText(request.PromptPath(), request.SourceText() + Environment.NewLine);
+            GeneratedTitleManifest.Reserve(request, 1, first);
+            var pcm = first + ".pcm";
+            File.WriteAllBytes(pcm, new byte[3 * 44100 * 4]);
+            WaveFileWriter.WrapPcmFile(pcm, first, 44100);
+            Assert(request.OutputPaths()[0] == first && GenerationBatchPlan.Create(request).PendingVariationIndices.SequenceEqual(new[] { 2 }), "Titled music could not resume without regenerating variation one.");
+            var second = GeneratedTitleManifest.ChooseOutputPath(request, "A new song", 2);
+            Assert(Path.GetFileName(second) == "02 - A new song.wav", "Repeated titles need distinct sequence numbers.");
+            var single = new MusicGenerationRequest { Prompt = "Single track", BaseName = "", OutputFolder = folder,
+                ModelId = "music_v2_5", OutputFormat = "pcm_44100", LengthSeconds = 3, Variations = 1, UseGeneratedTitle = true };
+            Assert(Path.GetFileName(GeneratedTitleManifest.ChooseOutputPath(single, "A new song", 1)) == "01 - A new song (2).wav",
+                "A single titled track needs a sequence number and must not overwrite another batch.");
+            var older = new MusicGenerationRequest { Prompt = "Older batch", BaseName = "", OutputFolder = folder,
+                ModelId = "music_v2_5", OutputFormat = "pcm_44100", LengthSeconds = 3, Variations = 2, UseGeneratedTitle = true };
+            var olderPath = Path.Combine(folder, "Older song_v1.wav");
+            GeneratedTitleManifest.Reserve(older, 1, olderPath);
+            Assert(older.OutputPaths()[0] == olderPath, "An existing title record must keep its original filename.");
+            var mp3 = new MusicGenerationRequest { Prompt = request.Prompt, BaseName = "", OutputFolder = folder,
+                ModelId = request.ModelId, OutputFormat = "mp3_44100_128", LengthSeconds = 3, Variations = 2, UseGeneratedTitle = true };
+            Assert(!mp3.OutputPaths()[0].Equals(first, StringComparison.OrdinalIgnoreCase),
+                "A different audio format must not inherit another format's title record.");
+            var mp3First = GeneratedTitleManifest.ChooseOutputPath(mp3, "A new song", 1);
+            GeneratedTitleManifest.Reserve(mp3, 1, mp3First);
+            Assert(mp3.OutputPaths()[0] == mp3First && request.OutputPaths()[0] == first,
+                "WAV and MP3 title records must be independent.");
+            request.Prompt = "Different prompt";
+            Assert(!request.OutputPaths().Contains(first), "A different prompt must not inherit the previous title map.");
         }
 
         private static void TestCompositionPlan()
@@ -630,6 +752,35 @@ namespace ElevenLabsMusicGenerator.Tests
                 Assert(!File.Exists(result.OutputPath + ".details.json") && !File.Exists(result.OutputPath + ".lyrics.txt"), "Details or lyrics cluttered the music folder.");
                 Assert(File.ReadAllBytes(result.OutputPath).Take(4).SequenceEqual(Encoding.ASCII.GetBytes("RIFF")), "Detailed PCM was not wrapped as WAV.");
                 Assert(!File.Exists(result.OutputPath + ".multipart.part"), "Successful detailed response left a large temporary file.");
+            }
+        }
+
+        private static void TestDetailedResponseTitle()
+        {
+            var folder = Path.Combine(AppPaths.AppFolder, "Returned Title Output");
+            Directory.CreateDirectory(folder);
+            var request = new MusicGenerationRequest { Prompt = "A test tune", BaseName = "", OutputFolder = folder,
+                ModelId = "music_v2_5", OutputFormat = "pcm_44100", LengthSeconds = 3, Variations = 2,
+                IncludeDetails = false, UseGeneratedTitle = true };
+            var boundary = "mock-titled-music";
+            var metadata = "{\"song_metadata\":{\"title\":\"Returned Song\"}}";
+            byte[] response;
+            using (var output = new MemoryStream())
+            {
+                WriteAscii(output, "--" + boundary + "\r\nContent-Type: application/json\r\n\r\n" + metadata + "\r\n");
+                WriteAscii(output, "--" + boundary + "\r\nContent-Type: application/octet-stream\r\n\r\n");
+                output.Write(new byte[3 * 44100 * 4], 0, 3 * 44100 * 4);
+                WriteAscii(output, "\r\n--" + boundary + "--\r\n");
+                response = output.ToArray();
+            }
+            using (var server = new MockHttpServer(response, "200 OK", "multipart/mixed; boundary=" + boundary))
+            {
+                var result = new ElevenLabsMusicClient("test-key", server.ApiRoot).GenerateOne(request, request.OutputPaths()[0], 1, CancellationToken.None, null);
+                server.Wait();
+                Assert(server.RequestText.Contains("POST /v1/music/detailed"), "Title mode must request detailed metadata.");
+                Assert(Path.GetFileName(result.OutputPath) == "01 - Returned Song.wav", "Returned title did not name the audio.");
+                Assert(result.DetailsPath == null && result.LyricsPath == null, "Disabled details should not be saved solely for the title.");
+                Assert(GenerationBatchPlan.Create(request).PendingVariationIndices.SequenceEqual(new[] { 2 }), "Returned title batch could not resume.");
             }
         }
 

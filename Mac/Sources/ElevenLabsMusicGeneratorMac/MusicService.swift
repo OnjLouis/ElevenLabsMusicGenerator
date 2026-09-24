@@ -20,12 +20,13 @@ struct MusicService {
 
     func generate(_ input: GenerationRequest, index: Int, key: String) async throws -> GeneratedTrack {
         try input.validate()
-        let destination = input.outputURL(index)
+        let destination = try input.resolvedOutputURL(index)
         let fm = FileManager.default
         guard !fm.fileExists(atPath: destination.path) else {
             throw MusicError.validation("The existing track will not be overwritten: \(destination.lastPathComponent)")
         }
         try fm.createDirectory(at: input.outputFolder, withIntermediateDirectories: true)
+        try fm.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
         let body = input.payload
         let path = input.endpoint
         var components = URLComponents(url: root.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
@@ -35,7 +36,7 @@ struct MusicService {
         request.timeoutInterval = 20 * 60
         request.setValue(key, forHTTPHeaderField: "xi-api-key")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("ElevenLabs Music Generator Mac/0.1", forHTTPHeaderField: "User-Agent")
+        request.setValue("ElevenLabs Music Generator Mac/1.2.0", forHTTPHeaderField: "User-Agent")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let start = Date()
         let (download, response) = try await session.download(for: request)
@@ -53,7 +54,7 @@ struct MusicService {
         try? fm.removeItem(at: audioPart)
         try fm.moveItem(at: download, to: rawPart)
         let details: String?
-        if input.includeDetails && !input.isSoundEffect {
+        if (input.includeDetails || input.useGeneratedTitle) && !input.isSoundEffect {
             let parsed = try MultipartMusicResponse.parse(file: rawPart, contentType: http.value(forHTTPHeaderField: "Content-Type") ?? "")
             details = parsed.metadata
             try parsed.audio.write(to: audioPart, options: .atomic)
@@ -71,13 +72,18 @@ struct MusicService {
         guard (try? audioPart.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0) ?? 0 > 0 else {
             throw MusicError.response("ElevenLabs returned an empty audio file.")
         }
+        var finalDestination = destination
+        if input.useGeneratedTitle {
+            let title = details.flatMap { Self.extractTitle($0) } ?? ""
+            finalDestination = try GeneratedTitleManifest.chooseOutputURL(input, title: title, index: index)
+        }
         let sidecarFolder = input.outputFolder.appendingPathComponent("Lyrics", isDirectory: true)
         var detailsURL: URL?
         var lyricsURL: URL?
-        if let details {
+        if let details, input.includeDetails {
             try fm.createDirectory(at: sidecarFolder, withIntermediateDirectories: true)
-            let base = destination.deletingPathExtension().lastPathComponent
-            let alternate = destination.deletingPathExtension().appendingPathExtension(input.format == .wav ? "mp3" : "wav")
+            let base = finalDestination.deletingPathExtension().lastPathComponent
+            let alternate = finalDestination.deletingPathExtension().appendingPathExtension(input.format == .wav ? "mp3" : "wav")
             let sidecarStem = base + (fm.fileExists(atPath: alternate.path) ? ".\(input.format.fileExtension)" : "")
             let jsonURL = sidecarFolder.appendingPathComponent(sidecarStem + ".details.json")
             try Data((details + "\n").utf8).write(to: jsonURL, options: .atomic)
@@ -89,15 +95,26 @@ struct MusicService {
             }
         }
         // Publish audio only after the response and any requested metadata are valid.
-        guard !fm.fileExists(atPath: destination.path) else {
-            throw MusicError.validation("Another file appeared at \(destination.lastPathComponent); it was not overwritten.")
+        guard !fm.fileExists(atPath: finalDestination.path) else {
+            throw MusicError.validation("Another file appeared at \(finalDestination.lastPathComponent); it was not overwritten.")
         }
-        try fm.moveItem(at: audioPart, to: destination)
-        if index == 1 {
+        if input.useGeneratedTitle {
+            if index == 1 { try input.sourceData.write(to: input.promptURL, options: .atomic) }
+            try GeneratedTitleManifest.reserve(input, index: index, output: finalDestination)
+        }
+        try fm.moveItem(at: audioPart, to: finalDestination)
+        if index == 1 && !input.useGeneratedTitle {
             try input.sourceData.write(to: input.promptURL, options: .atomic)
         }
-        return GeneratedTrack(url: destination, detailsURL: detailsURL, lyricsURL: lyricsURL,
+        return GeneratedTrack(url: finalDestination, detailsURL: detailsURL, lyricsURL: lyricsURL,
             seconds: Date().timeIntervalSince(start), songID: http.value(forHTTPHeaderField: "song-id"))
+    }
+
+    private static func extractTitle(_ json: String) -> String? {
+        guard let data = json.data(using: .utf8),
+              let result = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let metadata = result["song_metadata"] as? [String: Any] else { return nil }
+        return (metadata["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func request(path: String, key: String, method: String = "POST", body: [String: Any]? = nil) async throws -> (Data, HTTPURLResponse) {
@@ -105,7 +122,7 @@ struct MusicService {
         request.httpMethod = method
         request.timeoutInterval = 20 * 60
         request.setValue(key, forHTTPHeaderField: "xi-api-key")
-        request.setValue("ElevenLabs Music Generator Mac/0.1", forHTTPHeaderField: "User-Agent")
+        request.setValue("ElevenLabs Music Generator Mac/1.2.0", forHTTPHeaderField: "User-Agent")
         if let body {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
