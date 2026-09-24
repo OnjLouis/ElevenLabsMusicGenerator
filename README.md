@@ -1,4 +1,4 @@
-# ElevenLabs Music Generator
+# ElevenLabs Music and Sound FX Generator
 
 Accessible Windows and Mac applications for generating music and sound effects through ElevenLabs. The two platforms have separate downloads and store settings independently.
 
