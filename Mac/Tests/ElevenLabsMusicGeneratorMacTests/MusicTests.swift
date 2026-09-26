@@ -221,6 +221,11 @@ final class MusicTests: XCTestCase {
         XCTAssertEqual(balance.remaining, 62198)
         XCTAssertTrue(balance.display(now: Date(timeIntervalSince1970: 1790793065)).contains("1 hour"))
         XCTAssertEqual(try SubscriptionBalance.decode(Data(#"{"character_count":12,"character_limit":10,"next_character_count_reset_unix":null}"#.utf8)).remaining, 0)
+        let overage = try SubscriptionBalance.decode(Data(#"{"character_count":244469,"character_limit":114089,"can_extend_character_limit":true,"max_credit_limit_extension":"unlimited","current_overage":{"amount":"39.11","currency":"usd"}}"#.utf8)).display()
+        XCTAssertTrue(overage.contains("130,380"))
+        XCTAssertTrue(overage.contains("USD 39.11"))
+        XCTAssertTrue(overage.contains("Usage-based billing is enabled"))
+        XCTAssertTrue(overage.contains("total spendable balance is not available"))
         XCTAssertTrue(try SubscriptionBalance.decode(Data(#"{"character_count":0,"character_limit":10}"#.utf8)).display().contains("unavailable"))
         XCTAssertThrowsError(try SubscriptionBalance.decode(Data(#"{"character_count":4}"#.utf8)))
     }

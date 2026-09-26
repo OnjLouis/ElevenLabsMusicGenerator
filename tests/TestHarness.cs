@@ -730,6 +730,10 @@ namespace ElevenLabsMusicGenerator.Tests
             }
             Assert(SubscriptionBalance.Parse("{\"character_count\":12,\"character_limit\":10,\"next_character_count_reset_unix\":null}").Remaining == 0,
                 "Overage must not be shown as a negative balance.");
+            var overage = SubscriptionBalance.Parse("{\"character_count\":244469,\"character_limit\":114089,\"can_extend_character_limit\":true,\"max_credit_limit_extension\":\"unlimited\",\"current_overage\":{\"amount\":\"39.11\",\"currency\":\"usd\"}}").Format(DateTimeOffset.UtcNow);
+            Assert(overage.Contains("130,380") && overage.Contains("USD 39.11"), "Over-limit usage and its charge should be reported.");
+            Assert(overage.Contains("Usage-based billing is enabled") && overage.Contains("total spendable balance is not available"),
+                "The balance must not imply that an exhausted included allowance prevents generation.");
             Assert(SubscriptionBalance.Parse("{\"character_count\":0,\"character_limit\":10}").Format(DateTimeOffset.UtcNow).Contains("unavailable"),
                 "A missing reset time should be explained.");
             var rejected = false;
