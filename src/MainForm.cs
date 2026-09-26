@@ -35,7 +35,7 @@ namespace ElevenLabsMusicGenerator
         private readonly Button generateButton;
         private readonly Button cancelButton;
         private readonly Button openOutputButton;
-        private readonly Button balanceButton;
+        private readonly TextBox balanceTextBox;
         private readonly AccessibleStatusTextBox statusTextBox;
         private readonly ProgressBar progressBar;
         private readonly System.Windows.Forms.Timer draftTimer;
@@ -48,6 +48,7 @@ namespace ElevenLabsMusicGenerator
         private bool? displayedEffectsMode;
         private bool generationRunning;
         private bool checkingBalance;
+        private bool balanceRefreshPending;
         private MusicCompositionPlan activePlan;
 
         public MainForm(string initialFile)
@@ -132,12 +133,12 @@ namespace ElevenLabsMusicGenerator
             NumericFieldBehavior.SelectCurrentValueOnFocus(influenceNumeric);
             soundEffectOptions.Controls.Add(automaticDurationCheckBox);
             soundEffectOptions.Controls.Add(loopCheckBox);
-            soundEffectOptions.Controls.Add(new Label { Text = "Prompt influe&nce:", AutoSize = true, Anchor = AnchorStyles.Left });
+            soundEffectOptions.Controls.Add(new Label { Text = "Prompt influ&ence:", AutoSize = true, Anchor = AnchorStyles.Left });
             soundEffectOptions.Controls.Add(influenceNumeric);
             generationOptions.Controls.Add(soundEffectOptions);
             root.Controls.Add(generationOptions, 0, 2);
 
-            var nameRow = NewPathRow("&Base filename:", out baseNameTextBox, null);
+            var nameRow = NewPathRow("Base file&name:", out baseNameTextBox, null);
             baseNameTextBox.AccessibleName = "Base filename";
             baseNameTextBox.TextChanged += delegate { if (!changingBaseName) baseNameIsAutomatic = false; };
             root.Controls.Add(nameRow, 0, 3);
@@ -150,8 +151,6 @@ namespace ElevenLabsMusicGenerator
             cancelButton.Click += delegate { CancelGeneration(); };
             openOutputButton = NewButton("Open Output Folder", "Open the Preferences output folder in File Explorer", "Ctrl+Shift+O");
             openOutputButton.Click += delegate { OpenOutputFolder(); };
-            balanceButton = NewButton("Check Balance", "Check included ElevenLabs credits and the next reset without generating audio", "Ctrl+B");
-            balanceButton.Click += delegate { CheckBalance(); };
             var preferencesButton = NewButton("P&references...", "Open preferences", "Ctrl+,");
             preferencesButton.Click += delegate { ShowPreferences(0); };
             var helpButton = NewButton("Help", "Open the HTML manual", "F1");
@@ -159,18 +158,23 @@ namespace ElevenLabsMusicGenerator
             buttons.Controls.Add(generateButton);
             buttons.Controls.Add(cancelButton);
             buttons.Controls.Add(openOutputButton);
-            buttons.Controls.Add(balanceButton);
             buttons.Controls.Add(preferencesButton);
             buttons.Controls.Add(helpButton);
             root.Controls.Add(buttons, 0, 4);
 
-            var statusPanel = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1, RowCount = 3 };
+            var statusPanel = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1, RowCount = 5 };
+            var balanceLabel = new Label { Text = "&Balance:", AutoSize = true, UseMnemonic = true };
+            balanceTextBox = new TextBox { Dock = DockStyle.Top, ReadOnly = true, Multiline = true, ScrollBars = ScrollBars.Vertical,
+                Height = 70, TabStop = true, TabIndex = 0, Text = "Not checked. Press F5 to refresh your balance.",
+                AccessibleName = "Credit balance", AccessibleDescription = "Latest ElevenLabs credit balance. Use arrow keys to read each line or Ctrl+C to copy." };
             var statusLabel = new Label { Text = "&Status log:", AutoSize = true, UseMnemonic = true };
             progressBar = new ProgressBar { Dock = DockStyle.Top, Height = 18, Style = ProgressBarStyle.Continuous, AccessibleName = "Generation progress" };
-            statusTextBox = new AccessibleStatusTextBox { Dock = DockStyle.Top, ReadOnly = true, Multiline = true, ScrollBars = ScrollBars.Vertical, Height = 90, TabStop = true, Text = "Ready.", AccessibleName = "Status log", ShortcutText = "Alt+S" };
-            statusPanel.Controls.Add(statusLabel, 0, 0);
-            statusPanel.Controls.Add(progressBar, 0, 1);
-            statusPanel.Controls.Add(statusTextBox, 0, 2);
+            statusTextBox = new AccessibleStatusTextBox { Dock = DockStyle.Top, ReadOnly = true, Multiline = true, ScrollBars = ScrollBars.Vertical, Height = 90, TabStop = true, TabIndex = 1, Text = "Ready.", AccessibleName = "Status log", ShortcutText = "Alt+S" };
+            statusPanel.Controls.Add(balanceLabel, 0, 0);
+            statusPanel.Controls.Add(balanceTextBox, 0, 1);
+            statusPanel.Controls.Add(statusLabel, 0, 2);
+            statusPanel.Controls.Add(progressBar, 0, 3);
+            statusPanel.Controls.Add(statusTextBox, 0, 4);
             root.Controls.Add(statusPanel, 0, 5);
 
             Controls.Add(root);
@@ -180,6 +184,7 @@ namespace ElevenLabsMusicGenerator
             Controls.Add(statusStrip);
             MainMenuStrip.BringToFront();
             promptLabel.Click += delegate { promptTextBox.Focus(); };
+            balanceLabel.Click += delegate { balanceTextBox.Focus(); };
             statusLabel.Click += delegate { statusTextBox.Focus(); };
 
             draftTimer = new System.Windows.Forms.Timer { Interval = 1000 };
@@ -195,6 +200,7 @@ namespace ElevenLabsMusicGenerator
                 if (AppPaths.ApiKeyLoadMessage.Length > 0)
                     MessageBox.Show(this, AppPaths.ApiKeyLoadMessage, "API key storage", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 if (apiKey.Length == 0) ShowPreferences(1);
+                CheckBalance();
                 promptTextBox.Focus();
                 UpdateService.CheckAutomatically(this, settings);
             };
@@ -205,8 +211,9 @@ namespace ElevenLabsMusicGenerator
             if (keyData == (Keys.Alt | Keys.M)) { promptTextBox.Focus(); return true; }
             if (keyData == (Keys.Alt | Keys.D)) { if (!generationRunning) modelComboBox.Focus(); return true; }
             if (keyData == (Keys.Alt | Keys.S)) { statusTextBox.Focus(); return true; }
+            if (keyData == (Keys.Alt | Keys.B)) { balanceTextBox.Focus(); return true; }
             if (keyData == (Keys.Control | Keys.Enter)) { StartGeneration(); return true; }
-            if (keyData == (Keys.Control | Keys.B)) { CheckBalance(); return true; }
+            if (keyData == Keys.F5) { CheckBalance(); return true; }
             if (keyData == Keys.Escape && generationRunning) { CancelGeneration(); return true; }
             if (keyData == (Keys.Control | Keys.Oemcomma)) { ShowPreferences(0); return true; }
             if (keyData == Keys.F1) { OpenManual(); return true; }
@@ -234,10 +241,10 @@ namespace ElevenLabsMusicGenerator
 
             var options = new ToolStripMenuItem("&Options");
             options.DropDownItems.Add(MenuCommand("&Preferences...", delegate { ShowPreferences(0); }, Keys.Control | Keys.Oemcomma, "Ctrl+,"));
+            options.DropDownItems.Add(MenuCommand("Refresh &Balance", delegate { CheckBalance(); }, Keys.F5, "F5"));
 
             var help = new ToolStripMenuItem("&Help");
             help.DropDownItems.Add(MenuCommand("&Check for Updates...", delegate { UpdateService.CheckForUpdates(this, settings, false); }, Keys.Shift | Keys.F1, "Shift+F1"));
-            help.DropDownItems.Add(MenuCommand("Check &Balance", delegate { CheckBalance(); }, Keys.Control | Keys.B, "Ctrl+B"));
             help.DropDownItems.Add(MenuCommand("ElevenLabs Music and Sound FX Generator &Help", delegate { OpenManual(); }, Keys.F1, "F1"));
             help.DropDownItems.Add(MenuCommand("&Project Page", delegate { OpenProjectPage(); }, Keys.Control | Keys.F1, "Ctrl+F1"));
             help.DropDownItems.Add(new ToolStripMenuItem("&Usage Analytics", null, delegate { OpenUsageAnalytics(); }));
@@ -348,6 +355,7 @@ namespace ElevenLabsMusicGenerator
                 SetGenerationControls(false);
                 SetPlanMode();
                 generateButton.Focus();
+                CheckBalance();
             }
         }
 
@@ -650,6 +658,7 @@ namespace ElevenLabsMusicGenerator
                 variationsNumeric.Value = settings.DefaultVariations;
                 instrumentalCheckBox.Checked = settings.DefaultInstrumental;
                 SetStatus("Preferences saved.");
+                CheckBalance();
             }
         }
 
@@ -826,35 +835,38 @@ namespace ElevenLabsMusicGenerator
 
         private async void CheckBalance()
         {
-            if (checkingBalance) return;
+            if (IsDisposed || Disposing) return;
+            if (checkingBalance) { balanceRefreshPending = true; return; }
             var key = AppPaths.LoadApiKey();
             if (key.Length == 0)
             {
-                SetStatus("Save an ElevenLabs API key in Preferences before checking the balance.");
+                balanceTextBox.Text = "Save an ElevenLabs API key in Preferences before checking the balance.";
                 return;
             }
             checkingBalance = true;
-            balanceButton.Enabled = false;
-            SetStatus("Checking ElevenLabs subscription balance...");
+            balanceTextBox.Text = "Checking ElevenLabs subscription balance...";
             try
             {
                 var balance = await Task.Run(delegate { return new ElevenLabsMusicClient(key).GetSubscriptionBalance(); });
-                var message = balance.Format(DateTimeOffset.Now);
-                SetStatus(message);
-                MessageBox.Show(this, message, "Credit Balance", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                if (IsDisposed || Disposing) return;
+                balanceTextBox.Text = balance.Format(DateTimeOffset.Now);
             }
             catch (Exception ex)
             {
                 AppLog.WriteException("Could not check subscription balance", ex);
+                if (IsDisposed || Disposing) return;
                 var message = "Could not check the subscription balance: " + ex.Message + Environment.NewLine +
                     "A restricted API key may not permit subscription access. Generation is unaffected.";
-                SetStatus(message);
-                MessageBox.Show(this, message, "Credit Balance", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                balanceTextBox.Text = message;
             }
             finally
             {
                 checkingBalance = false;
-                balanceButton.Enabled = true;
+                if (balanceRefreshPending && !IsDisposed && !Disposing)
+                {
+                    balanceRefreshPending = false;
+                    CheckBalance();
+                }
             }
         }
 

@@ -4,7 +4,7 @@ The Mac app uses standard macOS menus and stores your ElevenLabs API key in Keyc
 
 On first use, open Settings to enter and test your API key. The first generation creates `~/Music/ElevenLabs Music Generator`; you can choose another folder in Settings. The app asks for confirmation before requests that may spend credits.
 
-Check Balance reads the included subscription allowance and the next reset without generating audio. If the allowance is exceeded, it also reports overage billing and any current overage charge returned by ElevenLabs. It cannot determine the total spendable balance, a per-request charge, or a separate limit placed on an API key.
+The balance field refreshes when the app opens and after generation. Option-B focuses its read-only text; Command-R refreshes it manually if credits change elsewhere. It reads the included subscription allowance and next reset without generating audio, and reports overage billing when available. It cannot determine the total spendable balance, a per-request charge, or a separate limit placed on an API key.
 
 Open Plan or Details can reload a saved plan or generated track details containing a reusable composition plan. Details without a plan are optional records and are not required to play the audio.
 

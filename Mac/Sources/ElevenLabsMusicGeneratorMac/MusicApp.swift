@@ -40,6 +40,12 @@ struct ElevenLabsMusicGeneratorApp: App {
                 Button("Donate") { model.openDonatePage() }
             }
             CommandMenu("Controls") {
+                Button("Focus Balance") { model.focusBalance() }
+                    .keyboardShortcut("b", modifiers: .option)
+                Button("Refresh Balance") { model.checkBalance() }
+                    .keyboardShortcut("r", modifiers: .command)
+                    .disabled(model.checkingBalance)
+                Divider()
                 Toggle("Instrumental", isOn: $model.preferences.instrumental)
                     .disabled(model.planEnabled || model.isSoundEffect)
                     .keyboardShortcut("i", modifiers: .command)
@@ -53,8 +59,6 @@ struct ElevenLabsMusicGeneratorApp: App {
                     .keyboardShortcut("f", modifiers: [.command, .shift])
             }
             CommandGroup(replacing: .help) {
-                Button("Check Credit Balance") { model.checkBalance() }
-                    .keyboardShortcut("b", modifiers: .command)
                 Button("ElevenLabs Music and Sound FX Generator Help") { model.openManual() }
                     .keyboardShortcut(KeyEquivalent("\u{F704}"), modifiers: [])
                 Button("Project Page") { model.openProjectPage() }

@@ -70,6 +70,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 Run("Create composition plan request", TestCreateCompositionPlanRequest);
                 Run("Music API key test uses plan endpoint", TestMusicApiKeyRequest);
                 Run("Subscription balance request and formatting", TestSubscriptionBalance);
+                Run("Navigable credit balance report", TestCreditBalanceReport);
                 Run("Composition plan request and resume", TestCompositionPlanRequest);
                 Run("Detailed response audio and lyrics", TestDetailedResponse);
                 Run("Detailed response names music from returned title", TestDetailedResponseTitle);
@@ -1081,14 +1082,17 @@ namespace ElevenLabsMusicGenerator.Tests
                 Assert(projectMenu != null && projectMenu.ShortcutKeys == (Keys.Control | Keys.F1), "Project page shortcut is missing.");
                 Assert(helpMenu.DropDownItems.OfType<ToolStripMenuItem>().Any(item => item.Text == "&Donate"), "Help, Donate is missing.");
                 Assert(helpMenu.DropDownItems.OfType<ToolStripMenuItem>().Any(item => item.Text == "&Usage Analytics"), "Help, Usage Analytics is missing.");
-                Assert(helpMenu.DropDownItems.OfType<ToolStripMenuItem>().Any(item => item.Text == "Check &Balance" && item.ShortcutKeys == (Keys.Control | Keys.B)), "Help, Check Balance shortcut is missing.");
+                Assert(!helpMenu.DropDownItems.OfType<ToolStripMenuItem>().Any(item => item.Text.Contains("Balance")), "Balance should stay on the main window, not in Help.");
+                var optionsMenu = form.MainMenuStrip.Items.OfType<ToolStripMenuItem>().First(item => item.Text == "&Options");
+                Assert(optionsMenu.DropDownItems.OfType<ToolStripMenuItem>().Any(item => item.Text == "Refresh &Balance" && item.ShortcutKeys == Keys.F5),
+                    "Manual balance refresh should be available with F5 in Options.");
                 var expected = new Dictionary<string, string>
                 {
                     { "&New Prompt", "Ctrl+N" }, { "&Open Prompt...", "Ctrl+O" },
                     { "&Save Prompt", "Ctrl+S" }, { "Save Prompt &As...", "Ctrl+Shift+S" },
                     { "Open Output &Folder", "Ctrl+Shift+O" }, { "&Generate", "Ctrl+Enter" },
                     { "&Cancel Generation", "Esc" }, { "&Preferences...", "Ctrl+," },
-                    { "&Check for Updates...", "Shift+F1" }, { "Check &Balance", "Ctrl+B" },
+                    { "Refresh &Balance", "F5" }, { "&Check for Updates...", "Shift+F1" },
                     { "ElevenLabs Music and Sound FX Generator &Help", "F1" },
                     { "&Project Page", "Ctrl+F1" }
                 };
@@ -1232,6 +1236,27 @@ namespace ElevenLabsMusicGenerator.Tests
             }
         }
 
+        private static void TestCreditBalanceReport()
+        {
+            using (var form = new MainForm(null))
+            {
+                form.StartPosition = FormStartPosition.Manual;
+                form.Location = new System.Drawing.Point(-2000, -2000);
+                form.Show();
+                Application.DoEvents();
+                var balance = Descendants(form).OfType<TextBox>().Single(control => control.AccessibleName == "Credit balance");
+                var status = Descendants(form).OfType<TextBox>().Single(control => control.AccessibleName == "Status log");
+                Assert(balance.ReadOnly && balance.Multiline && balance.TabStop, "The balance must be a focusable read-only multiline edit.");
+                Assert(balance.TabIndex < status.TabIndex && balance.Parent == status.Parent, "The balance must immediately precede the status log in keyboard order.");
+                Assert(!status.Text.Contains("Included allowance") && !status.Text.Contains("Checking ElevenLabs subscription balance"),
+                    "The balance must not be written into the status log.");
+                var method = typeof(MainForm).GetMethod("ProcessCmdKey", BindingFlags.Instance | BindingFlags.NonPublic);
+                var message = Message.Create(IntPtr.Zero, 0, IntPtr.Zero, IntPtr.Zero);
+                Assert((bool)method.Invoke(form, new object[] { message, Keys.Alt | Keys.B }) && balance.Focused, "Alt+B must focus the balance.");
+                form.Close();
+            }
+        }
+
         private static void TestPreferencesButtonOrder()
         {
             using (var preferences = new PreferencesForm(new AppSettings(), 0))
@@ -1264,7 +1289,8 @@ namespace ElevenLabsMusicGenerator.Tests
             var html = File.ReadAllText(AppPaths.ManualPath, Encoding.UTF8);
             Assert(html.Contains("<h2 id=\"changelog\">Changelog</h2>"), "The manual does not place a changelog near the top.");
             Assert(html.Contains("<h3>" + Program.Version + " - "), "The current version is missing from the manual changelog.");
-            Assert(html.Contains("Check Balance") && html.Contains("Ctrl+B") && html.Contains("user/subscription/get"), "The manual does not explain subscription balance checks.");
+            Assert(html.Contains("Refresh Balance") && html.Contains("Alt+B") && html.Contains("F5") &&
+                html.Contains("user/subscription/get"), "The manual does not explain automatic balance display and refresh.");
             Assert(html.Contains("Ctrl+F1"), "The project page shortcut is missing from the manual.");
             Assert(html.Contains("<h2 id=\"credits\">Credits</h2>"), "The manual has no credits section.");
             foreach (var url in new[] { "https://elevenlabs.io/app/settings/api-keys", "https://elevenlabs.io/app/developers/analytics/usage", "https://onj.me/software", "https://onj.me/donate", "https://github.com/OnjLouis/ElevenLabsMusicGenerator" })

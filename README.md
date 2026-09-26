@@ -8,7 +8,7 @@ You need an ElevenLabs account with Music API access and sufficient credits. Cre
 
 Write a prompt, choose the model, format, duration and number of variations, then review the confirmation before spending credits. Music v2 and v2.5 also support editable composition plans with sections and lyrics. Generated audio, the shared prompt, and optional returned lyrics and details are saved in the chosen Music folder. An interrupted batch can resume missing variations without overwriting completed tracks.
 
-Check Balance reads the included subscription allowance and the next reset without generating audio. If the allowance is exceeded, it also reports overage billing and any current overage charge returned by ElevenLabs. The result appears in the status log and a dialog. It cannot determine the total spendable balance, a per-request charge, or a separate limit placed on an API key.
+The balance field refreshes when the app opens and after generation. Alt+B focuses its read-only text; F5 refreshes it manually if credits change elsewhere. It reads the included subscription allowance and next reset without generating audio, and reports overage billing when available. It cannot determine the total spendable balance, a per-request charge, or a separate limit placed on an API key.
 
 The base filename keeps spaces you type. Clear it before generating Music to name each variation from the title returned by ElevenLabs. A small record in the output folder's `Lyrics` subfolder makes these titled batches resumable. Prompts show a mode-specific character counter and stop at the API limit.
 

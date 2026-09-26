@@ -35,7 +35,9 @@ final class AppModel: ObservableObject {
     @Published var showPlanEditor = false
     @Published var notice: AppNotice?
     @Published var status: [String] = ["Ready."]
+    @Published var balanceText = "Not checked yet. Press Command-R to refresh the balance."
     @Published var checkingBalance = false
+    @Published var balanceFocusRequest = 0
     @Published var completed: [URL] = []
     @Published var focusRequest: MainFocusRequest?
 
@@ -47,6 +49,7 @@ final class AppModel: ObservableObject {
     private var longMusicPrompt: String?
     private var soundEffectPrompt: String?
     private var checkedUpdatesOnLaunch = false
+    private var balanceRefreshPending = false
     private var skipNextModelDraftCapture = false
     private let service = MusicService()
 
@@ -301,7 +304,7 @@ final class AppModel: ObservableObject {
         completed = []
         let indices = pendingIndices
         generationTask = Task {
-            defer { isBusy = false; generationTask = nil; pendingRequest = nil; pendingIndices = [] }
+            defer { isBusy = false; generationTask = nil; pendingRequest = nil; pendingIndices = []; checkBalance() }
             do {
                 guard let key = try KeychainStore.read(), !key.isEmpty else { throw MusicError.validation("Add an API key in Settings first.") }
                 for index in indices {
@@ -363,26 +366,30 @@ final class AppModel: ObservableObject {
     }
 
     func checkBalance() {
-        guard !checkingBalance else { return }
+        guard !checkingBalance else { balanceRefreshPending = true; return }
         checkingBalance = true
-        addStatus("Checking ElevenLabs subscription balance...")
+        balanceText = "Checking ElevenLabs subscription balance..."
         Task {
-            defer { checkingBalance = false }
+            defer {
+                checkingBalance = false
+                if balanceRefreshPending {
+                    balanceRefreshPending = false
+                    checkBalance()
+                }
+            }
             do {
                 guard let key = try KeychainStore.read(), !key.isEmpty else {
                     throw MusicError.validation("Save an ElevenLabs API key in Settings before checking the balance.")
                 }
                 let balance = try await MusicService().subscriptionBalance(key)
-                let message = balance.display()
-                addStatus(message)
-                notice = AppNotice(title: "Credit Balance", message: message)
+                balanceText = balance.display()
             } catch {
-                let message = "Could not check the subscription balance: \(error.localizedDescription)\nA restricted API key may not permit subscription access. Generation is unaffected."
-                addStatus(message)
-                notice = AppNotice(title: "Credit Balance", message: message)
+                balanceText = "Could not check the subscription balance: \(error.localizedDescription)\nA restricted API key may not permit subscription access. Generation is unaffected."
             }
         }
     }
+
+    func focusBalance() { balanceFocusRequest += 1 }
 
     func checkUpdatesOnLaunch() {
         guard !checkedUpdatesOnLaunch, preferences.autoUpdateOnLaunch == true else { return }

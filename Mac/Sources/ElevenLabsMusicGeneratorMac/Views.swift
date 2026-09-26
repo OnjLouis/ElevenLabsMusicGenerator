@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 struct MainView: View {
     @ObservedObject var model: AppModel
     @State private var promptView: TabAwareTextView?
+    @State private var balanceView: TabAwareTextView?
     @State private var statusView: TabAwareTextView?
     @FocusState private var focus: FocusField?
 
@@ -18,14 +19,22 @@ struct MainView: View {
                 Button("Open Music Folder") { model.openOutputFolder() }
                     .accessibilityHint("Opens the folder where new tracks and prompts are saved. Command-Shift-O.")
             }
+            Text("Balance").font(.headline)
+            KeyboardTextView(text: .constant(model.balanceText), editable: false,
+                accessibilityLabel: "Credit balance",
+                accessibilityHelp: "Latest ElevenLabs credit balance. Read by line with the arrow keys or copy selected text. Option-B focuses this field.",
+                onTab: { focusTextView(statusView) },
+                onBackTab: {
+                    if let balanceView { balanceView.window?.selectPreviousKeyView(balanceView) }
+                },
+                onReady: { balanceView = $0 })
+                .frame(height: 85)
             Text("Status").font(.headline)
             KeyboardTextView(text: .constant(model.status.joined(separator: "\n")), editable: false,
                 accessibilityLabel: "Status log",
                 accessibilityHelp: "Generation and error messages, newest last.",
                 onTab: { focusTextView(promptView) },
-                onBackTab: {
-                    if let statusView { statusView.window?.selectPreviousKeyView(statusView) }
-                },
+                onBackTab: { focusTextView(balanceView) },
                 onReady: { statusView = $0 })
                 .frame(height: 100)
             Text("Prompt").font(.headline)
@@ -127,9 +136,6 @@ struct MainView: View {
                     .disabled(!model.isBusy)
                     .help("Cancel the current generation")
                     .accessibilityHint("Stops the current request. Completed tracks remain saved.")
-                Button("Check Balance") { model.checkBalance() }
-                    .disabled(model.checkingBalance)
-                    .accessibilityHint("Reads included credits remaining and the next reset in the Status log. Command-B. No audio is generated.")
                 Spacer()
                 if model.isBusy { ProgressView().controlSize(.small) }
             }
@@ -153,7 +159,8 @@ struct MainView: View {
                 model.addStatus("Sound Effects selected. Output changed to MP3 44.1 kHz, 192 kbps.")
             }
         }
-        .task { model.checkUpdatesOnLaunch() }
+        .task { model.checkUpdatesOnLaunch(); model.checkBalance() }
+        .onChange(of: model.balanceFocusRequest) { _, _ in focusTextView(balanceView) }
         .onChange(of: model.focusRequest) { _, request in
             guard let request else { return }
             focus = request.control == .model ? .model : .outputFormat
@@ -246,6 +253,7 @@ struct SettingsView: View {
             enteredKey = ""
             hasKey = true
             keyStatus = "API key saved in Keychain."
+            model.checkBalance()
         } catch { keyStatus = error.localizedDescription }
     }
 
