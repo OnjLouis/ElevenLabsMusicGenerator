@@ -35,6 +35,7 @@ namespace ElevenLabsMusicGenerator
         private readonly Button generateButton;
         private readonly Button cancelButton;
         private readonly Button openOutputButton;
+        private readonly Button balanceButton;
         private readonly AccessibleStatusTextBox statusTextBox;
         private readonly ProgressBar progressBar;
         private readonly System.Windows.Forms.Timer draftTimer;
@@ -46,6 +47,7 @@ namespace ElevenLabsMusicGenerator
         private string soundEffectPrompt;
         private bool? displayedEffectsMode;
         private bool generationRunning;
+        private bool checkingBalance;
         private MusicCompositionPlan activePlan;
 
         public MainForm(string initialFile)
@@ -148,6 +150,8 @@ namespace ElevenLabsMusicGenerator
             cancelButton.Click += delegate { CancelGeneration(); };
             openOutputButton = NewButton("Open Output Folder", "Open the Preferences output folder in File Explorer", "Ctrl+Shift+O");
             openOutputButton.Click += delegate { OpenOutputFolder(); };
+            balanceButton = NewButton("Check Balance", "Check included ElevenLabs credits and the next reset without generating audio", "Ctrl+B");
+            balanceButton.Click += delegate { CheckBalance(); };
             var preferencesButton = NewButton("P&references...", "Open preferences", "Ctrl+,");
             preferencesButton.Click += delegate { ShowPreferences(0); };
             var helpButton = NewButton("Help", "Open the HTML manual", "F1");
@@ -155,6 +159,7 @@ namespace ElevenLabsMusicGenerator
             buttons.Controls.Add(generateButton);
             buttons.Controls.Add(cancelButton);
             buttons.Controls.Add(openOutputButton);
+            buttons.Controls.Add(balanceButton);
             buttons.Controls.Add(preferencesButton);
             buttons.Controls.Add(helpButton);
             root.Controls.Add(buttons, 0, 4);
@@ -201,6 +206,7 @@ namespace ElevenLabsMusicGenerator
             if (keyData == (Keys.Alt | Keys.D)) { if (!generationRunning) modelComboBox.Focus(); return true; }
             if (keyData == (Keys.Alt | Keys.S)) { statusTextBox.Focus(); return true; }
             if (keyData == (Keys.Control | Keys.Enter)) { StartGeneration(); return true; }
+            if (keyData == (Keys.Control | Keys.B)) { CheckBalance(); return true; }
             if (keyData == Keys.Escape && generationRunning) { CancelGeneration(); return true; }
             if (keyData == (Keys.Control | Keys.Oemcomma)) { ShowPreferences(0); return true; }
             if (keyData == Keys.F1) { OpenManual(); return true; }
@@ -231,7 +237,8 @@ namespace ElevenLabsMusicGenerator
 
             var help = new ToolStripMenuItem("&Help");
             help.DropDownItems.Add(MenuCommand("&Check for Updates...", delegate { UpdateService.CheckForUpdates(this, settings, false); }, Keys.Shift | Keys.F1, "Shift+F1"));
-            help.DropDownItems.Add(MenuCommand("ElevenLabs Music Generator &Help", delegate { OpenManual(); }, Keys.F1, "F1"));
+            help.DropDownItems.Add(MenuCommand("Check &Balance", delegate { CheckBalance(); }, Keys.Control | Keys.B, "Ctrl+B"));
+            help.DropDownItems.Add(MenuCommand("ElevenLabs Music and Sound FX Generator &Help", delegate { OpenManual(); }, Keys.F1, "F1"));
             help.DropDownItems.Add(MenuCommand("&Project Page", delegate { OpenProjectPage(); }, Keys.Control | Keys.F1, "Ctrl+F1"));
             help.DropDownItems.Add(new ToolStripMenuItem("&Usage Analytics", null, delegate { OpenUsageAnalytics(); }));
             help.DropDownItems.Add(new ToolStripMenuItem("&Donate", null, delegate { OpenDonatePage(); }));
@@ -815,6 +822,40 @@ namespace ElevenLabsMusicGenerator
         private void OpenUsageAnalytics()
         {
             Process.Start(new ProcessStartInfo { FileName = "https://elevenlabs.io/app/developers/analytics/usage", UseShellExecute = true });
+        }
+
+        private async void CheckBalance()
+        {
+            if (checkingBalance) return;
+            var key = AppPaths.LoadApiKey();
+            if (key.Length == 0)
+            {
+                SetStatus("Save an ElevenLabs API key in Preferences before checking the balance.");
+                return;
+            }
+            checkingBalance = true;
+            balanceButton.Enabled = false;
+            SetStatus("Checking ElevenLabs subscription balance...");
+            try
+            {
+                var balance = await Task.Run(delegate { return new ElevenLabsMusicClient(key).GetSubscriptionBalance(); });
+                var message = balance.Format(DateTimeOffset.Now);
+                SetStatus(message);
+                MessageBox.Show(this, message, "Credit Balance", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                AppLog.WriteException("Could not check subscription balance", ex);
+                var message = "Could not check the subscription balance: " + ex.Message + Environment.NewLine +
+                    "A restricted API key may not permit subscription access. Generation is unaffected.";
+                SetStatus(message);
+                MessageBox.Show(this, message, "Credit Balance", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            finally
+            {
+                checkingBalance = false;
+                balanceButton.Enabled = true;
+            }
         }
 
         private void ShowAbout()

@@ -127,6 +127,9 @@ struct MainView: View {
                     .disabled(!model.isBusy)
                     .help("Cancel the current generation")
                     .accessibilityHint("Stops the current request. Completed tracks remain saved.")
+                Button("Check Balance") { model.checkBalance() }
+                    .disabled(model.checkingBalance)
+                    .accessibilityHint("Reads included credits remaining and the next reset in the Status log. Command-B. No audio is generated.")
                 Spacer()
                 if model.isBusy { ProgressView().controlSize(.small) }
             }

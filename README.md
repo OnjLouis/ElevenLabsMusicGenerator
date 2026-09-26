@@ -8,6 +8,8 @@ You need an ElevenLabs account with Music API access and sufficient credits. Cre
 
 Write a prompt, choose the model, format, duration and number of variations, then review the confirmation before spending credits. Music v2 and v2.5 also support editable composition plans with sections and lyrics. Generated audio, the shared prompt, and optional returned lyrics and details are saved in the chosen Music folder. An interrupted batch can resume missing variations without overwriting completed tracks.
 
+Check Balance reads included subscription credits remaining and the next reset without generating audio. The result appears in the status log and a dialog. It does not show a per-request charge or any separate limit placed on an API key.
+
 The base filename keeps spaces you type. Clear it before generating Music to name each variation from the title returned by ElevenLabs. A small record in the output folder's `Lyrics` subfolder makes these titled batches resumable. Prompts show a mode-specific character counter and stop at the API limit.
 
 Saved `.plan.json` files can be reopened. If a generated track's optional `.details.json` contains a composition plan, the same Open Plan or Details command loads it for editing and reuse. Details without a reusable plan remain a record of information returned by ElevenLabs; they are not required for audio playback.

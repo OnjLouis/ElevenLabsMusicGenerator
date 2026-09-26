@@ -47,6 +47,20 @@ namespace ElevenLabsMusicGenerator
             return "Music API key accepted. No music was generated.";
         }
 
+        public SubscriptionBalance GetSubscriptionBalance()
+        {
+            var request = CreateRequest(apiRoot + "/v1/user/subscription", "GET");
+            request.Timeout = 15000;
+            request.ReadWriteTimeout = 15000;
+            try
+            {
+                using (var response = (HttpWebResponse)request.GetResponse())
+                using (var reader = new StreamReader(response.GetResponseStream()))
+                    return SubscriptionBalance.Parse(reader.ReadToEnd());
+            }
+            catch (WebException ex) { throw CreateApiException(ex); }
+        }
+
         public MusicCompositionPlan CreateCompositionPlan(string prompt, int lengthSeconds, string modelId, CancellationToken cancellationToken)
         {
             if (string.IsNullOrWhiteSpace(prompt) || prompt.Length > 4100) throw new ArgumentException("Enter a prompt of no more than 4,100 characters.", "prompt");

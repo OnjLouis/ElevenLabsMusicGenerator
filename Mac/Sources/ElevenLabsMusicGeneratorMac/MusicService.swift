@@ -11,6 +11,11 @@ struct MusicService {
         return "Music API key accepted. No music was generated."
     }
 
+    func subscriptionBalance(_ key: String) async throws -> SubscriptionBalance {
+        let (data, _) = try await request(path: "/v1/user/subscription", key: key, method: "GET", timeout: 15)
+        return try SubscriptionBalance.decode(data)
+    }
+
     func suggestPlan(prompt: String, seconds: Int, model: MusicModel, key: String) async throws -> CompositionPlan {
         guard model == .v2 || model == .v25 else { throw MusicError.validation("Plans require Music v2 or v2.5.") }
         let body: [String: Any] = ["prompt": prompt, "music_length_ms": seconds * 1000, "model_id": model.rawValue]
@@ -36,7 +41,7 @@ struct MusicService {
         request.timeoutInterval = 20 * 60
         request.setValue(key, forHTTPHeaderField: "xi-api-key")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("ElevenLabs Music Generator Mac/1.2.0", forHTTPHeaderField: "User-Agent")
+        request.setValue("ElevenLabs Music Generator Mac/1.3.0", forHTTPHeaderField: "User-Agent")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let start = Date()
         let (download, response) = try await session.download(for: request)
@@ -117,12 +122,13 @@ struct MusicService {
         return (metadata["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func request(path: String, key: String, method: String = "POST", body: [String: Any]? = nil) async throws -> (Data, HTTPURLResponse) {
+    private func request(path: String, key: String, method: String = "POST", body: [String: Any]? = nil,
+                         timeout: TimeInterval = 20 * 60) async throws -> (Data, HTTPURLResponse) {
         var request = URLRequest(url: root.appendingPathComponent(path))
         request.httpMethod = method
-        request.timeoutInterval = 20 * 60
+        request.timeoutInterval = timeout
         request.setValue(key, forHTTPHeaderField: "xi-api-key")
-        request.setValue("ElevenLabs Music Generator Mac/1.2.0", forHTTPHeaderField: "User-Agent")
+        request.setValue("ElevenLabs Music Generator Mac/1.3.0", forHTTPHeaderField: "User-Agent")
         if let body {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONSerialization.data(withJSONObject: body)

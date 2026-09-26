@@ -16,6 +16,8 @@
 <li><a href="#updates">Updates</a></li><li><a href="#files-and-storage">Files and Storage</a></li>
 <li><a href="#credits">Credits</a></li></ul>
 <h2 id="changelog">Changelog</h2>
+<h3>1.3.0 - 26 September 2026</h3>
+<p>Added an on-demand subscription balance and next-reset check, shown in the accessible status log without generating audio.</p>
 <h3>1.2.0 - 24 September 2026</h3>
 <p>Improved sound-effect length focus order, prompt limits and character counts, music title naming, filenames with spaces, first-run update checks, and separate Music and Sound FX drafts in one saved file.</p>
 <h3>1.1.0 - 24 September 2026</h3>
@@ -52,6 +54,7 @@
 <p>A section heading such as <code>Verse</code> is sent with lyric lines as <code>[Verse]</code> followed by your text. You can also enter a short musical direction instead of lyrics. Suggestions are drafts, not a guarantee that every sung word will match. Plan requests are available for Music v2 and v2.5, not v1.</p>
 <h2 id="results-and-credits">Results And Credit Usage</h2>
 <p>The Status log in the main window lists request progress and each completed track on a separate line with its generation time, not its audio playing length. Completion also displays a notice. The music response does not provide a reliable per-request credit charge, so check <a href="https://elevenlabs.io/app/developers/analytics/usage">ElevenLabs Usage Analytics</a> for actual credit consumption. The same page opens from <strong>Help, Usage Analytics</strong>. A failed or cancelled request may still affect usage.</p>
+<p>Choose <strong>Check Balance</strong> in the main window or <strong>Check Credit Balance</strong> in Help, or press Command-B, to read the included subscription credits remaining and the next reset in this Mac's local time. This <a href="https://elevenlabs.io/docs/api-reference/user/subscription/get">read-only subscription request</a> does not generate audio or spend credits. The amount is the period limit minus credits used, not the charge for the last generation or a guarantee that a separately capped API key can spend all of it. Usage-based overages may permit more. If a restricted key cannot read subscription details, the check reports an error; music and sound-effects generation are unaffected.</p>
 <table><thead><tr><th>Action</th><th>What affects usage</th></tr></thead><tbody>
 <tr><td>Generate Music</td><td>Generated duration and number of variations.</td></tr>
 <tr><td>Generate Sound Effects with automatic duration</td><td>Each completed effect is a separate request; ElevenLabs chooses its duration.</td></tr>
@@ -67,6 +70,7 @@
 <h2 id="keyboard-commands">Keyboard Commands</h2><table><thead><tr><th>Command</th><th>Shortcut</th></tr></thead><tbody>
 <tr><td>New prompt</td><td>Command-N</td></tr><tr><td>Open prompt</td><td>Command-O</td></tr><tr><td>Save prompt</td><td>Command-S</td></tr>
 <tr><td>Save prompt as</td><td>Command-Shift-S</td></tr><tr><td>Open Music folder</td><td>Command-Shift-O</td></tr><tr><td>Generate</td><td>Command-Return</td></tr>
+<tr><td>Check subscription balance</td><td>Command-B</td></tr>
 <tr><td>Edit plan</td><td>Command-P</td></tr><tr><td>Settings</td><td>Command-Comma; Escape closes Settings</td></tr>
 <tr><td>Toggle instrumental</td><td>Command-I</td></tr><tr><td>Toggle composition plan</td><td>Command-U</td></tr>
 <tr><td>Focus Model</td><td>Command-Shift-M</td></tr><tr><td>Focus Output Format</td><td>Command-Shift-F</td></tr>

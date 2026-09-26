@@ -53,6 +53,8 @@ struct ElevenLabsMusicGeneratorApp: App {
                     .keyboardShortcut("f", modifiers: [.command, .shift])
             }
             CommandGroup(replacing: .help) {
+                Button("Check Credit Balance") { model.checkBalance() }
+                    .keyboardShortcut("b", modifiers: .command)
                 Button("ElevenLabs Music and Sound FX Generator Help") { model.openManual() }
                     .keyboardShortcut(KeyEquivalent("\u{F704}"), modifiers: [])
                 Button("Project Page") { model.openProjectPage() }

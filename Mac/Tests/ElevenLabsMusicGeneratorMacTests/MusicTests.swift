@@ -206,6 +206,25 @@ final class MusicTests: XCTestCase {
         XCTAssertTrue(result.contains("Music API key accepted"))
     }
 
+    func testSubscriptionBalanceRequestAndFormatting() async throws {
+        defer { StubProtocol.reply = nil }
+        StubProtocol.reply = { request in
+            XCTAssertEqual(request.url?.path, "/v1/user/subscription")
+            XCTAssertEqual(request.httpMethod, "GET")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "xi-api-key"), "test-key")
+            return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                Data(#"{"character_count":2224,"character_limit":64422,"next_character_count_reset_unix":1790796665}"#.utf8))
+        }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StubProtocol.self]
+        let balance = try await MusicService(session: URLSession(configuration: configuration)).subscriptionBalance("test-key")
+        XCTAssertEqual(balance.remaining, 62198)
+        XCTAssertTrue(balance.display(now: Date(timeIntervalSince1970: 1790793065)).contains("1 hour"))
+        XCTAssertEqual(try SubscriptionBalance.decode(Data(#"{"character_count":12,"character_limit":10,"next_character_count_reset_unix":null}"#.utf8)).remaining, 0)
+        XCTAssertTrue(try SubscriptionBalance.decode(Data(#"{"character_count":0,"character_limit":10}"#.utf8)).display().contains("unavailable"))
+        XCTAssertThrowsError(try SubscriptionBalance.decode(Data(#"{"character_count":4}"#.utf8)))
+    }
+
     func testCompositionPlanRoundTrip() throws {
         let original = CompositionPlan(sections: [MusicSection(name: "Verse", body: "First line", durationMilliseconds: 12_500,
             positiveStyles: "jazz\nsoft", negativeStyles: "loud", contextAdherence: "high")])

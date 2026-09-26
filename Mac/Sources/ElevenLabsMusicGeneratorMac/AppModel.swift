@@ -35,6 +35,7 @@ final class AppModel: ObservableObject {
     @Published var showPlanEditor = false
     @Published var notice: AppNotice?
     @Published var status: [String] = ["Ready."]
+    @Published var checkingBalance = false
     @Published var completed: [URL] = []
     @Published var focusRequest: MainFocusRequest?
 
@@ -358,6 +359,28 @@ final class AppModel: ObservableObject {
         let url = URL(string: "https://elevenlabs.io/app/developers/analytics/usage")!
         if !NSWorkspace.shared.open(url) {
             show(MusicError.response("Could not open ElevenLabs Usage Analytics in your browser."))
+        }
+    }
+
+    func checkBalance() {
+        guard !checkingBalance else { return }
+        checkingBalance = true
+        addStatus("Checking ElevenLabs subscription balance...")
+        Task {
+            defer { checkingBalance = false }
+            do {
+                guard let key = try KeychainStore.read(), !key.isEmpty else {
+                    throw MusicError.validation("Save an ElevenLabs API key in Settings before checking the balance.")
+                }
+                let balance = try await MusicService().subscriptionBalance(key)
+                let message = balance.display()
+                addStatus(message)
+                notice = AppNotice(title: "Credit Balance", message: message)
+            } catch {
+                let message = "Could not check the subscription balance: \(error.localizedDescription)\nA restricted API key may not permit subscription access. Generation is unaffected."
+                addStatus(message)
+                notice = AppNotice(title: "Credit Balance", message: message)
+            }
         }
     }
 

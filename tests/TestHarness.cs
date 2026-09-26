@@ -69,6 +69,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 Run("Fractional plan durations", TestFractionalPlanDurations);
                 Run("Create composition plan request", TestCreateCompositionPlanRequest);
                 Run("Music API key test uses plan endpoint", TestMusicApiKeyRequest);
+                Run("Subscription balance request and formatting", TestSubscriptionBalance);
                 Run("Composition plan request and resume", TestCompositionPlanRequest);
                 Run("Detailed response audio and lyrics", TestDetailedResponse);
                 Run("Detailed response names music from returned title", TestDetailedResponseTitle);
@@ -715,6 +716,28 @@ namespace ElevenLabsMusicGenerator.Tests
             }
         }
 
+        private static void TestSubscriptionBalance()
+        {
+            var response = "{\"tier\":\"starter\",\"character_count\":2224,\"character_limit\":64422,\"next_character_count_reset_unix\":1790796665}";
+            using (var server = new MockHttpServer(Encoding.UTF8.GetBytes(response)))
+            {
+                var balance = new ElevenLabsMusicClient("test-key", server.ApiRoot).GetSubscriptionBalance();
+                server.Wait();
+                Assert(server.RequestText.Contains("GET /v1/user/subscription"), "The subscription endpoint was not used.");
+                Assert(server.RequestText.Contains("xi-api-key: test-key"), "The API key header is missing.");
+                Assert(balance.Remaining == 62198, "The included credit balance is wrong.");
+                Assert(balance.Format(DateTimeOffset.FromUnixTimeSeconds(1790793065)).Contains("1 hour"), "The reset time was not described.");
+            }
+            Assert(SubscriptionBalance.Parse("{\"character_count\":12,\"character_limit\":10,\"next_character_count_reset_unix\":null}").Remaining == 0,
+                "Overage must not be shown as a negative balance.");
+            Assert(SubscriptionBalance.Parse("{\"character_count\":0,\"character_limit\":10}").Format(DateTimeOffset.UtcNow).Contains("unavailable"),
+                "A missing reset time should be explained.");
+            var rejected = false;
+            try { SubscriptionBalance.Parse("{\"character_count\":4}"); }
+            catch (InvalidDataException) { rejected = true; }
+            Assert(rejected, "A missing limit must not be guessed.");
+        }
+
         private static void TestDetailedResponse()
         {
             var folder = Path.Combine(AppPaths.AppFolder, "Detailed Output");
@@ -1054,13 +1077,15 @@ namespace ElevenLabsMusicGenerator.Tests
                 Assert(projectMenu != null && projectMenu.ShortcutKeys == (Keys.Control | Keys.F1), "Project page shortcut is missing.");
                 Assert(helpMenu.DropDownItems.OfType<ToolStripMenuItem>().Any(item => item.Text == "&Donate"), "Help, Donate is missing.");
                 Assert(helpMenu.DropDownItems.OfType<ToolStripMenuItem>().Any(item => item.Text == "&Usage Analytics"), "Help, Usage Analytics is missing.");
+                Assert(helpMenu.DropDownItems.OfType<ToolStripMenuItem>().Any(item => item.Text == "Check &Balance" && item.ShortcutKeys == (Keys.Control | Keys.B)), "Help, Check Balance shortcut is missing.");
                 var expected = new Dictionary<string, string>
                 {
                     { "&New Prompt", "Ctrl+N" }, { "&Open Prompt...", "Ctrl+O" },
                     { "&Save Prompt", "Ctrl+S" }, { "Save Prompt &As...", "Ctrl+Shift+S" },
                     { "Open Output &Folder", "Ctrl+Shift+O" }, { "&Generate", "Ctrl+Enter" },
                     { "&Cancel Generation", "Esc" }, { "&Preferences...", "Ctrl+," },
-                    { "&Check for Updates...", "Shift+F1" }, { "ElevenLabs Music Generator &Help", "F1" },
+                    { "&Check for Updates...", "Shift+F1" }, { "Check &Balance", "Ctrl+B" },
+                    { "ElevenLabs Music and Sound FX Generator &Help", "F1" },
                     { "&Project Page", "Ctrl+F1" }
                 };
                 foreach (var item in form.MainMenuStrip.Items.OfType<ToolStripMenuItem>().SelectMany(menu => menu.DropDownItems.OfType<ToolStripMenuItem>()))
@@ -1075,7 +1100,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 {
                     { "Generate", "Ctrl+Enter" }, { "&Cancel", "Esc" },
                     { "Edit &plan...", "Alt+P" },
-                    { "Open Output Folder", "Ctrl+Shift+O" }, { "P&references...", "Ctrl+," },
+                    { "Open Output Folder", "Ctrl+Shift+O" }, { "Check Balance", "Ctrl+B" }, { "P&references...", "Ctrl+," },
                     { "Help", "F1" }
                 };
                 foreach (var button in Descendants(form).OfType<Button>())
@@ -1235,6 +1260,7 @@ namespace ElevenLabsMusicGenerator.Tests
             var html = File.ReadAllText(AppPaths.ManualPath, Encoding.UTF8);
             Assert(html.Contains("<h2 id=\"changelog\">Changelog</h2>"), "The manual does not place a changelog near the top.");
             Assert(html.Contains("<h3>" + Program.Version + " - "), "The current version is missing from the manual changelog.");
+            Assert(html.Contains("Check Balance") && html.Contains("Ctrl+B") && html.Contains("user/subscription/get"), "The manual does not explain subscription balance checks.");
             Assert(html.Contains("Ctrl+F1"), "The project page shortcut is missing from the manual.");
             Assert(html.Contains("<h2 id=\"credits\">Credits</h2>"), "The manual has no credits section.");
             foreach (var url in new[] { "https://elevenlabs.io/app/settings/api-keys", "https://elevenlabs.io/app/developers/analytics/usage", "https://onj.me/software", "https://onj.me/donate", "https://github.com/OnjLouis/ElevenLabsMusicGenerator" })
