@@ -4,7 +4,7 @@ Accessible Windows and Mac applications for generating music and sound effects t
 
 ## Getting started
 
-You need an ElevenLabs account with Music API access and sufficient credits. Create an API key in ElevenLabs under Developers, API Keys, and enable Music access. You can set a credit limit for safety. In the app, open Preferences or Settings, save the key, and use Test Key before generating music. Key testing does not generate music.
+You need an ElevenLabs account with Music API access and sufficient credits. Create an API key in ElevenLabs under Developers, API Keys, and enable Music access. Enable `user_read` as well if you want the app to show your subscription balance; an existing key can be edited to grant it. You can set a credit limit for safety. In the app, open Preferences or Settings, save the key, and use Test Key before generating music. Key testing does not generate music.
 
 Write a prompt, choose the model, format, duration and number of variations, then review the confirmation before spending credits. Music v2 and v2.5 also support editable composition plans with sections and lyrics. Generated audio, the shared prompt, and optional returned lyrics and details are saved in the chosen Music folder. An interrupted batch can resume missing variations without overwriting completed tracks.
 
