@@ -160,7 +160,10 @@ final class AppModel: ObservableObject {
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
-            if url.lastPathComponent.lowercased().hasSuffix(".sfx.json") {
+            let name = url.lastPathComponent.lowercased()
+            if name.hasSuffix(".plan.json") || name.hasSuffix(".details.json") {
+                try importPlan(url)
+            } else if name.hasSuffix(".sfx.json") {
                 let saved = try GenerationRequest.readSoundEffect(Data(contentsOf: url))
                 guard saved.prompt.utf16.count <= GenerationRequest.soundEffectsPromptLimit else {
                     throw MusicError.validation("The sound effect prompt exceeds the 450-character limit.")
@@ -176,6 +179,8 @@ final class AppModel: ObservableObject {
                 soundEffectPrompt = saved.prompt
                 filename.openedDocument(named: String(url.lastPathComponent.dropLast(9)))
                 promptDocument = nil
+            } else if url.pathExtension.lowercased() == "json" {
+                throw MusicError.validation("Choose a .plan.json or .details.json file for a composition plan, or a .sfx.json file for a sound effect prompt.")
             } else {
                 let text = try String(contentsOf: url, encoding: .utf8).trimmingCharacters(in: .newlines)
                 guard text.utf16.count <= 4100 else { throw MusicError.validation("The prompt exceeds the 4100-character Music limit.") }
@@ -220,11 +225,24 @@ final class AppModel: ObservableObject {
         panel.allowedContentTypes = [.json]
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
-            plan = try CompositionPlan.decodePayload(Data(contentsOf: url))
-            planEnabled = true
-            showPlanEditor = true
+            try importPlan(url)
             addStatus("Opened \(url.lastPathComponent).")
         } catch { show(error) }
+    }
+
+    private func importPlan(_ url: URL) throws {
+        let imported = try CompositionPlan.decodePayload(Data(contentsOf: url))
+        if selectedModel == .v1 || isSoundEffect {
+            if isSoundEffect { soundEffectPrompt = prompt }
+            else { longMusicPrompt = prompt }
+            skipNextModelDraftCapture = true
+            preferences.model = MusicModel.v25.rawValue
+            prompt = longMusicPrompt ?? ""
+        }
+        promptDocument = nil
+        plan = imported
+        planEnabled = true
+        showPlanEditor = true
     }
 
     func editPlan() {

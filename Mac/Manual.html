@@ -16,6 +16,8 @@
 <li><a href="#updates">Updates</a></li><li><a href="#files-and-storage">Files and Storage</a></li>
 <li><a href="#credits">Credits</a></li></ul>
 <h2 id="changelog">Changelog</h2>
+<h3>1.3.1 - Pending release</h3>
+<p>Saved composition plans, sound effect prompts, and returned track details now have readable JSON layout. Open Prompt recognizes reusable plan and details files; interrupted batches made with older compact JSON still resume safely.</p>
 <h3>1.3.0 - 26 September 2026</h3>
 <p>Added a read-only balance field that refreshes on launch and after generation without generating audio. Option-B focuses it for line-by-line reading and copying.</p>
 <h3>1.2.0 - 24 September 2026</h3>
@@ -50,6 +52,7 @@
 <p>Sound effects use the same output folder as music. Each batch saves one <code>.sfx.json</code> containing the prompt and its settings, without lyrics files. Choose <strong>Open Prompt</strong> to reuse this file; change the base filename for a new batch. Save Prompt still saves an ordinary text copy. Resuming an interrupted batch requires matching sound-effect settings and keeps completed audio. See the <a href="https://elevenlabs.io/docs/api-reference/text-to-sound-effects/convert">Sound Effects API reference</a> for service details.</p>
 <h2 id="composition-plans">Composition Plans And Lyrics</h2>
 <p>Music v2 and v2.5 can use a section-based plan. Open <strong>Edit Plan</strong> or press Command-P to prepare one even when <strong>Use composition plan</strong> is off. Enable that checkbox when you want generation to use the plan. Each section has a heading, duration in milliseconds, optional lyric lines or musical cues, included/excluded styles, and context adherence. Use <strong>Open Plan or Details</strong> to load a saved plan or a track's details file when it contains a reusable plan. <strong>Export Plan</strong> saves the plan as a JSON file.</p>
+<p><strong>Open Prompt</strong> also recognizes <code>.plan.json</code> and reusable <code>.details.json</code> files and opens their sections in the plan editor. Saved JSON is laid out over several lines for reading outside the app. Within a quoted JSON value, <code>\n</code> is the required representation of a lyric line break; it becomes a real line break when the plan is imported.</p>
 <p><strong>Suggest from Prompt</strong> asks ElevenLabs for a draft plan; review it before generation. Plan mode uses section durations instead of the main Length setting. It follows the plan rather than the plain prompt, and Force instrumental is unavailable. The current plan is restored when you reopen the app.</p>
 <p>A section heading such as <code>Verse</code> is sent with lyric lines as <code>[Verse]</code> followed by your text. You can also enter a short musical direction instead of lyrics. Suggestions are drafts, not a guarantee that every sung word will match. Plan requests are available for Music v2 and v2.5, not v1.</p>
 <h2 id="results-and-credits">Results And Credit Usage</h2>

@@ -151,7 +151,8 @@ enum BatchPlanner {
         let paths = try (1...request.variations).map { try request.resolvedOutputURL($0) }
         let existing = (1...request.variations).filter { fm.fileExists(atPath: paths[$0 - 1].path) }
         if !existing.isEmpty {
-            guard let source = try? Data(contentsOf: request.promptURL), source == request.sourceData else {
+            guard let source = try? Data(contentsOf: request.promptURL),
+                  matchesSource(source, request.sourceData, isJSON: request.promptURL.pathExtension.lowercased() == "json") else {
                 throw MusicError.validation("Existing tracks cannot be resumed because their saved prompt or plan does not match. Choose a new base filename.")
             }
             for index in existing {
@@ -163,6 +164,14 @@ enum BatchPlanner {
             }
         }
         return (1...request.variations).filter { !existing.contains($0) }
+    }
+
+    private static func matchesSource(_ saved: Data, _ current: Data, isJSON: Bool) -> Bool {
+        if saved == current { return true }
+        guard isJSON,
+              let left = (try? JSONSerialization.jsonObject(with: saved)) as? [String: Any],
+              let right = (try? JSONSerialization.jsonObject(with: current)) as? [String: Any] else { return false }
+        return NSDictionary(dictionary: left).isEqual(to: right)
     }
 
     private static func matchesAudio(_ data: Data, request: GenerationRequest) -> Bool {

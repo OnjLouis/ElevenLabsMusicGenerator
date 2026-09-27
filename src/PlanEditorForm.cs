@@ -237,7 +237,7 @@ namespace ElevenLabsMusicGenerator
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;
                 try
                 {
-                    File.WriteAllText(dialog.FileName, json + Environment.NewLine, new UTF8Encoding(false));
+                    File.WriteAllText(dialog.FileName, ReadableJson.Format(json) + Environment.NewLine, new UTF8Encoding(false));
                     SetStatus("Saved " + Path.GetFileName(dialog.FileName) + ".");
                 }
                 catch (Exception ex) { MessageBox.Show(this, ex.Message, "Could not export plan", MessageBoxButtons.OK, MessageBoxIcon.Warning); }

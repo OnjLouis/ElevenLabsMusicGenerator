@@ -65,6 +65,8 @@ namespace ElevenLabsMusicGenerator.Tests
                 Run("Accessible control structure", TestAccessibleControlStructure);
                 Run("Manual contents and changelog", TestManualNavigation);
                 Run("Composition plan validation and round trip", TestCompositionPlan);
+                Run("Readable JSON and legacy batch resume", TestReadableJsonAndLegacyResume);
+                Run("Open Prompt recognizes composition plans", TestOpenPromptRecognizesPlan);
                 Run("Track details can reopen a composition plan", TestDetailsPlanImport);
                 Run("Fractional plan durations", TestFractionalPlanDurations);
                 Run("Create composition plan request", TestCreateCompositionPlanRequest);
@@ -289,7 +291,10 @@ namespace ElevenLabsMusicGenerator.Tests
                 Assert(server.RequestText.Contains("POST /v1/sound-generation?output_format=pcm_44100"), "Wrong sound effects endpoint.");
                 Assert(!server.RequestText.Contains("composition_plan") && !server.RequestText.Contains("music_length_ms"), "Music fields leaked into effects request.");
                 Assert(!Directory.Exists(Path.Combine(folder, "Lyrics")), "Sound effects created a lyrics folder.");
+                Assert(File.ReadAllLines(request.PromptPath()).Length > 1, "Sound effect settings were saved on one long line.");
                 Assert(GenerationBatchPlan.Create(request).PendingVariationIndices.SequenceEqual(new[] { 2 }), "Automatic duration batch did not resume.");
+                File.WriteAllText(request.PromptPath(), request.SourceText() + Environment.NewLine, new UTF8Encoding(false));
+                Assert(GenerationBatchPlan.Create(request).PendingVariationIndices.SequenceEqual(new[] { 2 }), "An older compact sound effect prompt did not resume.");
                 request.Loop = false;
                 var refused = false;
                 try { GenerationBatchPlan.Create(request); } catch (InvalidDataException) { refused = true; }
@@ -642,6 +647,52 @@ namespace ElevenLabsMusicGenerator.Tests
             Assert(rejected, "A too-short section was accepted.");
         }
 
+        private static void TestReadableJsonAndLegacyResume()
+        {
+            var plan = new MusicCompositionPlan();
+            plan.Sections.Add(new MusicSection { Name = "Verse", Body = "First line\nSecond line", DurationSeconds = 3 });
+            var compact = new System.Web.Script.Serialization.JavaScriptSerializer().Serialize(plan.ToPayload());
+            var readable = ReadableJson.Format(compact);
+            Assert(readable.Contains(Environment.NewLine), "Saved JSON is still one physical line.");
+            Assert(MusicCompositionPlan.FromJson(readable).Sections[0].Body == "First line\nSecond line",
+                "Formatted JSON lost the section line breaks.");
+
+            var folder = Path.Combine(AppPaths.AppFolder, "JSON Resume Output");
+            Directory.CreateDirectory(folder);
+            var request = new MusicGenerationRequest { Plan = plan, OutputFolder = folder, BaseName = "Readable",
+                ModelId = "music_v2_5", OutputFormat = "mp3_44100_128", Variations = 2 };
+            var audio = new byte[129];
+            audio[0] = (byte)'I'; audio[1] = (byte)'D'; audio[2] = (byte)'3';
+            File.WriteAllBytes(request.OutputPaths()[0], audio);
+            File.WriteAllText(request.PromptPath(), readable + Environment.NewLine, new UTF8Encoding(false));
+            Assert(GenerationBatchPlan.Create(request).PendingVariationIndices.SequenceEqual(new[] { 2 }),
+                "The app cannot resume a batch with a readable plan file.");
+            File.WriteAllText(request.PromptPath(), compact + Environment.NewLine, new UTF8Encoding(false));
+            Assert(GenerationBatchPlan.Create(request).PendingVariationIndices.SequenceEqual(new[] { 2 }),
+                "The app cannot resume a batch with an older one-line plan.");
+            plan.Sections[0].Body = "Different lyrics";
+            AssertResumeRejected(request, "Changed lyrics were accepted for resume.");
+        }
+
+        private static void TestOpenPromptRecognizesPlan()
+        {
+            var plan = new MusicCompositionPlan();
+            plan.Sections.Add(new MusicSection { Name = "Verse", Body = "First line\nSecond line", DurationSeconds = 3 });
+            var path = Path.Combine(AppPaths.AppFolder, "Import.plan.json");
+            File.WriteAllText(path, ReadableJson.Format(plan.ToJson()), new UTF8Encoding(false));
+            var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            using (var form = new MainForm(null))
+            {
+                typeof(MainForm).GetMethod("LoadPromptFile", flags).Invoke(form, new object[] { path });
+                var imported = (MusicCompositionPlan)typeof(MainForm).GetField("activePlan", flags).GetValue(form);
+                var selected = (CheckBox)typeof(MainForm).GetField("usePlanCheckBox", flags).GetValue(form);
+                var prompt = (TextBox)typeof(MainForm).GetField("promptTextBox", flags).GetValue(form);
+                Assert(imported != null && imported.Sections[0].Body == "First line\nSecond line", "Open Prompt did not decode lyric lines.");
+                Assert(selected.Checked, "Open Prompt did not enable the imported plan.");
+                Assert(!prompt.Text.Contains("\"chunks\"") && !prompt.Text.Contains("\\n"), "Open Prompt put raw JSON in the typing field.");
+            }
+        }
+
         private static void TestDetailsPlanImport()
         {
             var details = "{\"song_metadata\":{\"title\":\"Test\"},\"composition_plan\":{\"chunks\":[{\"text\":\"[Verse]\\nSing again\",\"duration_ms\":12500,\"positive_styles\":[\"warm piano\"]}]}}";
@@ -771,6 +822,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 server.Wait();
                 Assert(server.RequestText.Contains("POST /v1/music/detailed?output_format=pcm_44100"), "Detailed endpoint was not called.");
                 Assert(result.DetailsPath != null && File.ReadAllText(result.DetailsPath).Contains("song_metadata"), "Details JSON was not saved.");
+                Assert(File.ReadAllLines(result.DetailsPath).Length > 1, "Track details were saved on one long line.");
                 var reusablePlan = MusicCompositionPlan.FromJson(File.ReadAllText(result.DetailsPath, Encoding.UTF8));
                 Assert(reusablePlan.Sections.Count == 1 && reusablePlan.Sections[0].Body.Contains("Sing along"), "Saved details cannot be reopened as a composition plan.");
                 Assert(result.LyricsPath != null && File.ReadAllText(result.LyricsPath).Contains("Hello there"), "Generated lyrics were not saved.");

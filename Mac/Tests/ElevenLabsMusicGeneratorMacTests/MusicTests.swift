@@ -48,6 +48,7 @@ final class MusicTests: XCTestCase {
         XCTAssertNil(input.payload["force_instrumental"])
         XCTAssertNil(input.payload["music_length_ms"])
         let saved = try GenerationRequest.readSoundEffect(input.sourceData)
+        XCTAssertTrue(String(data: input.sourceData, encoding: .utf8)!.contains("\n"))
         XCTAssertEqual(saved.prompt, input.prompt)
         XCTAssertEqual(saved.effects.duration, 0.5)
         XCTAssertTrue(saved.effects.loop)
@@ -269,6 +270,26 @@ final class MusicTests: XCTestCase {
         XCTAssertThrowsError(try BatchPlanner.pending(changed))
     }
 
+    func testLegacyCompactPlanResumesWithoutChangingLyrics() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let plan = CompositionPlan(sections: [MusicSection(name: "Verse", body: "First line\nSecond line",
+            durationMilliseconds: 3_000)])
+        let compact = try JSONSerialization.data(withJSONObject: plan.payload, options: [.sortedKeys])
+        var request = GenerationRequest(prompt: "", baseName: "Legacy", outputFolder: folder,
+            durationSeconds: 3, variations: 2, instrumental: false, model: .v25,
+            format: .mp3_44100_128, includeDetails: false, plan: plan)
+        var mp3 = Data("ID3".utf8)
+        mp3.append(Data(repeating: 0, count: 200))
+        try mp3.write(to: request.outputURL(1))
+        try compact.write(to: request.promptURL)
+        XCTAssertTrue(String(data: request.sourceData, encoding: .utf8)!.contains("\n"))
+        XCTAssertEqual(try BatchPlanner.pending(request), [2])
+        request.plan?.sections[0].body = "Changed lyrics"
+        XCTAssertThrowsError(try BatchPlanner.pending(request))
+    }
+
     func testMultipartAudioAndMetadata() throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -318,6 +339,7 @@ final class MusicTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: result.url.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: request.promptURL.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: result.detailsURL!.path))
+        XCTAssertTrue(try String(contentsOf: result.detailsURL!).contains("\n"))
         let reopenedPlan = try CompositionPlan.decodePayload(Data(contentsOf: result.detailsURL!))
         XCTAssertEqual(reopenedPlan.sections.first?.body, "Hello world")
         XCTAssertTrue(try String(contentsOf: result.lyricsURL!).contains("Hello world"))
@@ -391,6 +413,11 @@ final class MusicTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: result.url).count, 44100 * 4 + 44)
         XCTAssertNil(result.lyricsURL)
         XCTAssertNil(result.detailsURL)
+        XCTAssertTrue(try String(contentsOf: request.promptURL).contains("\n"))
+        XCTAssertEqual(try BatchPlanner.pending(request), [2])
+        let compactEffects = try JSONSerialization.data(withJSONObject:
+            JSONSerialization.jsonObject(with: request.sourceData), options: [.sortedKeys])
+        try compactEffects.write(to: request.promptURL)
         XCTAssertEqual(try BatchPlanner.pending(request), [2])
         request.effects.loop = true
         XCTAssertThrowsError(try BatchPlanner.pending(request))

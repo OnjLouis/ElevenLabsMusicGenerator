@@ -27,7 +27,7 @@ if (-not (Test-Path -LiteralPath $compiler)) {
 
 New-Item -ItemType Directory -Path $portable | Out-Null
 $sources = Get-ChildItem -LiteralPath $source -Filter '*.cs' | Sort-Object Name | ForEach-Object FullName
-& $compiler /nologo /target:winexe /optimize+ "/out:$executable" /reference:System.dll /reference:System.Core.dll /reference:System.Security.dll /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.dll /reference:System.Web.Extensions.dll /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll $sources
+& $compiler /nologo /target:winexe /optimize+ "/out:$executable" /reference:System.dll /reference:System.Core.dll /reference:System.Security.dll /reference:System.Runtime.Serialization.dll /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.dll /reference:System.Web.Extensions.dll /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll $sources
 if ($LASTEXITCODE -ne 0) {
     throw 'Build failed.'
 }

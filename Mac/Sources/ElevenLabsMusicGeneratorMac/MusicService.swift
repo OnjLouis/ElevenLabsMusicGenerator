@@ -41,7 +41,7 @@ struct MusicService {
         request.timeoutInterval = 20 * 60
         request.setValue(key, forHTTPHeaderField: "xi-api-key")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("ElevenLabs Music Generator Mac/1.3.0", forHTTPHeaderField: "User-Agent")
+        request.setValue("ElevenLabs Music Generator Mac/1.3.1", forHTTPHeaderField: "User-Agent")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let start = Date()
         let (download, response) = try await session.download(for: request)
@@ -91,7 +91,16 @@ struct MusicService {
             let alternate = finalDestination.deletingPathExtension().appendingPathExtension(input.format == .wav ? "mp3" : "wav")
             let sidecarStem = base + (fm.fileExists(atPath: alternate.path) ? ".\(input.format.fileExtension)" : "")
             let jsonURL = sidecarFolder.appendingPathComponent(sidecarStem + ".details.json")
-            try Data((details + "\n").utf8).write(to: jsonURL, options: .atomic)
+            let readableDetails: String
+            if let data = details.data(using: .utf8),
+               let object = try? JSONSerialization.jsonObject(with: data),
+               let formatted = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys]),
+               let text = String(data: formatted, encoding: .utf8) {
+                readableDetails = text
+            } else {
+                readableDetails = details
+            }
+            try Data((readableDetails + "\n").utf8).write(to: jsonURL, options: .atomic)
             detailsURL = jsonURL
             if let lyrics = Self.extractLyrics(details), !lyrics.isEmpty {
                 let textURL = sidecarFolder.appendingPathComponent(sidecarStem + ".txt")
@@ -128,7 +137,7 @@ struct MusicService {
         request.httpMethod = method
         request.timeoutInterval = timeout
         request.setValue(key, forHTTPHeaderField: "xi-api-key")
-        request.setValue("ElevenLabs Music Generator Mac/1.3.0", forHTTPHeaderField: "User-Agent")
+        request.setValue("ElevenLabs Music Generator Mac/1.3.1", forHTTPHeaderField: "User-Agent")
         if let body {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONSerialization.data(withJSONObject: body)

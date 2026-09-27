@@ -12,7 +12,7 @@ The balance field refreshes when the app opens and after generation. Alt+B focus
 
 The base filename keeps spaces you type. Clear it before generating Music to name each variation from the title returned by ElevenLabs. A small record in the output folder's `Lyrics` subfolder makes these titled batches resumable. Prompts show a mode-specific character counter and stop at the API limit.
 
-Saved `.plan.json` files can be reopened. If a generated track's optional `.details.json` contains a composition plan, the same Open Plan or Details command loads it for editing and reuse. Details without a reusable plan remain a record of information returned by ElevenLabs; they are not required for audio playback.
+Saved `.plan.json` files can be reopened with Open Prompt or Plan or Open Plan or Details. If a generated track's optional `.details.json` contains a composition plan, either command loads it for editing and reuse. Saved plans, sound effect prompts, and track details use readable multi-line JSON; escaped `\n` inside a JSON string becomes a lyric line break when imported. Details without a reusable plan remain a record of information returned by ElevenLabs; they are not required for audio playback.
 
 ## Platform downloads
 

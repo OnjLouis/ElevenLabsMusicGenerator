@@ -226,7 +226,7 @@ namespace ElevenLabsMusicGenerator
             var menu = new MenuStrip { AccessibleName = "Menu bar" };
             var file = new ToolStripMenuItem("&File");
             file.DropDownItems.Add(MenuCommand("&New Prompt", delegate { NewPrompt(); }, Keys.Control | Keys.N, "Ctrl+N"));
-            file.DropDownItems.Add(MenuCommand("&Open Prompt...", delegate { OpenPrompt(); }, Keys.Control | Keys.O, "Ctrl+O"));
+            file.DropDownItems.Add(MenuCommand("&Open Prompt or Plan...", delegate { OpenPrompt(); }, Keys.Control | Keys.O, "Ctrl+O"));
             file.DropDownItems.Add(MenuCommand("&Save Prompt", delegate { SavePrompt(false); }, Keys.Control | Keys.S, "Ctrl+S"));
             file.DropDownItems.Add(MenuCommand("Save Prompt &As...", delegate { SavePrompt(true); }, Keys.Control | Keys.Shift | Keys.S, "Ctrl+Shift+S"));
             file.DropDownItems.Add(new ToolStripSeparator());
@@ -512,7 +512,7 @@ namespace ElevenLabsMusicGenerator
             using (var dialog = new OpenFileDialog())
             {
                 dialog.Title = "Open prompt";
-                dialog.Filter = "Prompt files (*.txt;*.ini;*.sfx.json)|*.txt;*.ini;*.sfx.json|All files (*.*)|*.*";
+                dialog.Filter = "Prompts and plans (*.txt;*.ini;*.sfx.json;*.plan.json;*.details.json)|*.txt;*.ini;*.sfx.json;*.plan.json;*.details.json|All files (*.*)|*.*";
                 if (Directory.Exists(settings.DefaultOutputFolder)) dialog.InitialDirectory = settings.DefaultOutputFolder;
                 if (dialog.ShowDialog(this) == DialogResult.OK) LoadPromptFile(dialog.FileName);
             }
@@ -544,6 +544,29 @@ namespace ElevenLabsMusicGenerator
         {
             try
             {
+                if (path.EndsWith(".plan.json", StringComparison.OrdinalIgnoreCase) ||
+                    path.EndsWith(".details.json", StringComparison.OrdinalIgnoreCase))
+                {
+                    var imported = MusicCompositionPlan.FromJson(File.ReadAllText(path, Encoding.UTF8));
+                    if (settings.ModelId == "music_v1" || settings.ModelId == MusicGenerationRequest.SoundEffectsModel)
+                    {
+                        SaveGenerationSettings();
+                        settings.ModelId = "music_v2_5";
+                        SetGenerationMode();
+                        settings.Save();
+                    }
+                    activePlan = imported;
+                    usePlanCheckBox.Checked = true;
+                    SavePlanDraftNonFatal();
+                    SetPlanMode();
+                    SetStatus("Opened composition plan: " + Path.GetFileName(path) + ". Review its sections before generating.");
+                    if (Visible) EditPlan();
+                    else Shown += delegate { BeginInvoke((Action)EditPlan); };
+                    return;
+                }
+                if (Path.GetExtension(path).Equals(".json", StringComparison.OrdinalIgnoreCase) &&
+                    !path.EndsWith(".sfx.json", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("Choose a .plan.json or .details.json file to open a composition plan, or a .sfx.json file for a sound effect prompt.");
                 if (settings.ModelId == MusicGenerationRequest.SoundEffectsModel) soundEffectPrompt = null;
                 else longMusicPrompt = null;
                 var text = File.ReadAllText(path, Encoding.UTF8);

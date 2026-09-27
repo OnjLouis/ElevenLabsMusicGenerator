@@ -18,7 +18,7 @@ namespace ElevenLabsMusicGenerator
             if (existing.Count > 0)
             {
                 var promptPath = request.PromptPath();
-                if (!File.Exists(promptPath) || !string.Equals(File.ReadAllText(promptPath, Encoding.UTF8).TrimEnd('\r', '\n'), request.SourceText(), StringComparison.Ordinal))
+                if (!File.Exists(promptPath) || !MatchesSavedSource(promptPath, request.SourceText()))
                     throw new InvalidDataException("Existing tracks cannot be resumed because their saved prompt or plan does not match. Choose a new base filename to start a separate batch.");
 
                 foreach (var index in existing)
@@ -32,6 +32,14 @@ namespace ElevenLabsMusicGenerator
                 ExistingCount = existing.Count,
                 PendingVariationIndices = Enumerable.Range(1, paths.Count).Where(index => !File.Exists(paths[index - 1])).ToList()
             };
+        }
+
+        private static bool MatchesSavedSource(string path, string current)
+        {
+            var saved = File.ReadAllText(path, Encoding.UTF8).TrimEnd('\r', '\n');
+            if (string.Equals(saved, current, StringComparison.Ordinal)) return true;
+            return Path.GetExtension(path).Equals(".json", StringComparison.OrdinalIgnoreCase) &&
+                ReadableJson.Equivalent(saved, current);
         }
 
         private static bool MatchesCompletedAudio(string path, MusicGenerationRequest request)

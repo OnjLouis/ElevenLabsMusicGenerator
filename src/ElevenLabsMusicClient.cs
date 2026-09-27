@@ -193,11 +193,19 @@ namespace ElevenLabsMusicGenerator
                         }
 
                         if (variationIndex == 1)
-                            File.WriteAllText(promptPartPath, requestData.SourceText() + Environment.NewLine, new UTF8Encoding(false));
+                        {
+                            var source = requestData.SourceText();
+                            if (Path.GetExtension(promptPath).Equals(".json", StringComparison.OrdinalIgnoreCase))
+                                source = ReadableJson.Format(source);
+                            File.WriteAllText(promptPartPath, source + Environment.NewLine, new UTF8Encoding(false));
+                        }
                         if (details != null && requestData.IncludeDetails)
                         {
                             Directory.CreateDirectory(lyricsFolder);
-                            File.WriteAllText(detailsPartPath, details.MetadataJson + Environment.NewLine, new UTF8Encoding(false));
+                            string readableDetails;
+                            try { readableDetails = ReadableJson.Format(details.MetadataJson); }
+                            catch (System.Xml.XmlException) { readableDetails = details.MetadataJson; }
+                            File.WriteAllText(detailsPartPath, readableDetails + Environment.NewLine, new UTF8Encoding(false));
                             if (!string.IsNullOrWhiteSpace(details.LyricsText))
                                 File.WriteAllText(lyricsPartPath, details.LyricsText + Environment.NewLine, new UTF8Encoding(false));
                         }

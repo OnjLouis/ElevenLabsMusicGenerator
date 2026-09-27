@@ -190,7 +190,7 @@ struct GenerationRequest {
             var saved = payload
             saved["duration_seconds"] = effects.automaticDuration ? NSNull() : effects.duration as Any
             saved["output_format"] = format.rawValue
-            return (try? JSONSerialization.data(withJSONObject: saved, options: [.sortedKeys])) ?? Data()
+            return (try? JSONSerialization.data(withJSONObject: saved, options: [.prettyPrinted, .sortedKeys])) ?? Data()
         }
         if let plan { return (try? plan.encodedPayload()) ?? Data() }
         return Data((prompt.trimmingCharacters(in: .newlines) + "\n").utf8)

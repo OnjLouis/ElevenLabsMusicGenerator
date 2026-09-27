@@ -6,7 +6,7 @@ On first use, open Settings to enter and test your API key. Enable the key's `us
 
 The balance field refreshes when the app opens and after generation. Option-B focuses its read-only text; Command-R refreshes it manually if credits change elsewhere. It reads the included subscription allowance and next reset without generating audio, and reports overage billing when available. It cannot determine the total spendable balance, a per-request charge, or a separate limit placed on an API key.
 
-Open Plan or Details can reload a saved plan or generated track details containing a reusable composition plan. Details without a plan are optional records and are not required to play the audio.
+Open Prompt or Open Plan or Details can reload a saved plan or generated track details containing a reusable composition plan. Saved plans, sound effect prompts, and track details use readable multi-line JSON; escaped `\n` inside a JSON string becomes a lyric line break when imported. Details without a plan are optional records and are not required to play the audio.
 
 Read the [Mac manual](Manual.html) for composition plans, keyboard commands, recovery, file locations, and manual update instructions.
 
