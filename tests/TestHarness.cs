@@ -71,6 +71,8 @@ namespace ElevenLabsMusicGenerator.Tests
                 Run("Fractional plan durations", TestFractionalPlanDurations);
                 Run("Create composition plan request", TestCreateCompositionPlanRequest);
                 Run("Music API key test uses plan endpoint", TestMusicApiKeyRequest);
+                Run("Sound Effects API key test checks audio", TestSoundEffectsApiKeyRequest);
+                Run("API key test reports balance permission", TestApiKeyBalancePermission);
                 Run("Subscription balance request and formatting", TestSubscriptionBalance);
                 Run("Navigable credit balance report", TestCreditBalanceReport);
                 Run("Composition plan request and resume", TestCompositionPlanRequest);
@@ -765,6 +767,53 @@ namespace ElevenLabsMusicGenerator.Tests
                 Assert(server.RequestText.Contains("POST /v1/music/plan"), "The key test did not use the Music endpoint.");
                 Assert(server.RequestText.Contains("\"music_length_ms\":3000"), "The key test used the wrong length.");
                 Assert(server.RequestText.Contains("\"model_id\":\"music_v2_5\""), "The key test used the wrong model.");
+            }
+            using (var server = new MockHttpServer(Encoding.UTF8.GetBytes(response)))
+            {
+                new ElevenLabsMusicClient("test-key", server.ApiRoot).TestApiKey("music_v2");
+                server.Wait();
+                Assert(server.RequestText.Contains("\"model_id\":\"music_v2\""), "The Music v2 key test used the wrong model.");
+            }
+        }
+
+        private static void TestSoundEffectsApiKeyRequest()
+        {
+            using (var server = new MockHttpServer(Encoding.ASCII.GetBytes("ID3test-audio"), "200 OK", "audio/mpeg"))
+            {
+                string result;
+                try { result = new ElevenLabsMusicClient("test-key", server.ApiRoot).TestApiKey(MusicGenerationRequest.SoundEffectsModel); }
+                catch { server.Wait(); throw; }
+                server.Wait();
+                Assert(result.Contains("Sound Effects API key accepted"), "The Sound Effects API key test did not succeed.");
+                Assert(server.RequestText.Contains("POST /v1/sound-generation "), "The key test did not use the Sound Effects endpoint.");
+                Assert(server.RequestText.Contains("\"duration_seconds\":0.5"), "The key test did not request the minimum duration.");
+                Assert(server.RequestText.Contains("\"model_id\":\"eleven_text_to_sound_v2\""), "The key test used the wrong model.");
+            }
+            using (var server = new MockHttpServer(Encoding.UTF8.GetBytes("{}"), "200 OK", "application/json"))
+            {
+                var rejected = false;
+                try { new ElevenLabsMusicClient("test-key", server.ApiRoot).TestApiKey(MusicGenerationRequest.SoundEffectsModel); }
+                catch (InvalidDataException) { rejected = true; }
+                server.Wait();
+                Assert(rejected, "A non-audio response was treated as successful Sound Effects access.");
+            }
+        }
+
+        private static void TestApiKeyBalancePermission()
+        {
+            var response = "{\"character_count\":5,\"character_limit\":100,\"next_character_count_reset_unix\":1790796665}";
+            using (var server = new MockHttpServer(Encoding.UTF8.GetBytes(response)))
+            {
+                var result = new ElevenLabsMusicClient("test-key", server.ApiRoot).TestBalanceAccess();
+                server.Wait();
+                Assert(server.RequestText.Contains("GET /v1/user/subscription"), "Balance permission check used the wrong endpoint.");
+                Assert(result.Contains("Credit balance access available"), "Readable credit balance permission was not reported.");
+            }
+            using (var server = new MockHttpServer(Encoding.UTF8.GetBytes("{}"), "403 Forbidden"))
+            {
+                var result = new ElevenLabsMusicClient("test-key", server.ApiRoot).TestBalanceAccess();
+                server.Wait();
+                Assert(result.Contains("user_read"), "Restricted balance access did not explain the required permission.");
             }
         }
 

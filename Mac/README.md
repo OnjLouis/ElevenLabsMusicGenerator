@@ -11,3 +11,5 @@ Open Prompt or Open Plan or Details can reload a saved plan or generated track d
 Read the [Mac manual](Manual.html) for composition plans, keyboard commands, recovery, file locations, and manual update instructions.
 
 Choose Sound Effects v2 in the model selector to generate effects instead of music. Enable Sound Effects access on your API key. Effects support automatic or fixed duration (0.5 to 30 seconds), looping, and prompt influence. Generated effects use the same output folder, with a reusable `.sfx.json` prompt that you can reload with Open Prompt. Music plans and lyrics do not apply to effects.
+
+Test Key checks the selected feature and separately reports whether the key can read the credit balance (`user_read`), even if the feature test fails. Music v2 and v2.5 use their respective non-generating plan requests; Music v1 access is checked through a v2.5 plan request. The Sound Effects test requires confirmation and generates a disposable 0.5-second effect that may spend credits.

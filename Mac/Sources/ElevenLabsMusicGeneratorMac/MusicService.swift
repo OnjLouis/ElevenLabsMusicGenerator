@@ -4,16 +4,39 @@ struct MusicService {
     var session: URLSession = .shared
     var root = URL(string: "https://api.elevenlabs.io")!
 
-    func testKey(_ key: String) async throws -> String {
+    func testKey(_ key: String, model: MusicModel = .v25) async throws -> String {
+        if model == .soundEffects {
+            let body: [String: Any] = ["text": "A brief soft click", "duration_seconds": 0.5,
+                "model_id": MusicModel.soundEffects.rawValue]
+            let (data, response) = try await request(path: "/v1/sound-generation", key: key, body: body, timeout: 120)
+            guard response.mimeType?.hasPrefix("audio/") == true, !data.isEmpty else {
+                throw MusicError.response("ElevenLabs did not return audio for the Sound Effects key test.")
+            }
+            return "Sound Effects API key accepted. A 0.5-second test effect was generated and discarded; this request may have used credits."
+        }
+        let planModel = model == .v2 ? MusicModel.v2 : .v25
         let body: [String: Any] = ["prompt": "A short instrumental piano phrase", "music_length_ms": 3000,
-            "model_id": MusicModel.v25.rawValue]
+            "model_id": planModel.rawValue]
         _ = try await request(path: "/v1/music/plan", key: key, body: body)
-        return "Music API key accepted. No music was generated."
+        return model == .v1
+            ? "Music API key accepted through a v2.5 plan request. Music v1 was not tested directly; no music was generated."
+            : "Music API key accepted. No music was generated."
     }
 
     func subscriptionBalance(_ key: String) async throws -> SubscriptionBalance {
         let (data, _) = try await request(path: "/v1/user/subscription", key: key, method: "GET", timeout: 15)
         return try SubscriptionBalance.decode(data)
+    }
+
+    func testBalanceAccess(_ key: String) async -> String {
+        do {
+            _ = try await subscriptionBalance(key)
+            return "Credit balance access available."
+        } catch MusicError.service(let status, _) where status == 401 || status == 403 {
+            return "Credit balance unavailable. Enable the API key's user_read permission to show the balance."
+        } catch {
+            return "Credit balance access could not be verified. Music and Sound Effects access are separate."
+        }
     }
 
     func suggestPlan(prompt: String, seconds: Int, model: MusicModel, key: String) async throws -> CompositionPlan {

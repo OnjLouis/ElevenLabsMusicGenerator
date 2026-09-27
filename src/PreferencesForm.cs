@@ -75,7 +75,7 @@ namespace ElevenLabsMusicGenerator
             apiKeyTextBox.UseSystemPasswordChar = true;
             showKeyCheckBox = new CheckBox { Text = "&Show API key", AutoSize = true, AccessibleName = "Show API key" };
             showKeyCheckBox.CheckedChanged += delegate { apiKeyTextBox.UseSystemPasswordChar = !showKeyCheckBox.Checked; };
-            testKeyButton = NewButton("&Test API key", "Test the API key without spending credits");
+            testKeyButton = NewButton("&Test API key", "Test Music access without generating audio, or confirm a credit-using Sound Effects test");
             testKeyButton.Click += TestKeyButtonClick;
             var getKeyLink = new LinkLabel
             {
@@ -89,7 +89,7 @@ namespace ElevenLabsMusicGenerator
                 try { Process.Start("https://elevenlabs.io/app/settings/api-keys"); }
                 catch (Exception ex) { SetApiStatus("Could not open the API key page: " + ex.Message); }
             };
-            apiStatusLabel = new AccessibleStatusLabel { AutoSize = true, MaximumSize = new Size(610, 0), Text = "Testing the key does not generate music or spend credits.", AccessibleName = "API key status" };
+            apiStatusLabel = new AccessibleStatusLabel { AutoSize = true, MaximumSize = new Size(610, 0), Text = "Music key tests do not generate audio. Sound Effects tests require confirmation and may spend credits.", AccessibleName = "API key status" };
             AddLabeledControl(api, "API &key:", apiKeyTextBox);
             AddFullWidthControl(api, showKeyCheckBox);
             AddFullWidthControl(api, testKeyButton);
@@ -219,11 +219,26 @@ namespace ElevenLabsMusicGenerator
                 apiKeyTextBox.Focus();
                 return;
             }
+            var modelId = settings.ModelId;
+            if (modelId == MusicGenerationRequest.SoundEffectsModel &&
+                MessageBox.Show(this, "To verify Sound Effects access, ElevenLabs must generate a 0.5-second test effect. It will be discarded, but this request may spend credits. Continue?",
+                    "Test Sound Effects API key", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+            {
+                SetApiStatus("Sound Effects key test cancelled. No request was sent.");
+                return;
+            }
             testKeyButton.Enabled = false;
-            SetApiStatus("Testing API key...");
+            SetApiStatus(modelId == MusicGenerationRequest.SoundEffectsModel ? "Testing Sound Effects access..." : "Testing Music access...");
             try
             {
-                var result = await Task.Run(delegate { return new ElevenLabsMusicClient(key).TestApiKey(); });
+                var result = await Task.Run(delegate
+                {
+                    var client = new ElevenLabsMusicClient(key);
+                    string modelResult;
+                    try { modelResult = client.TestApiKey(modelId); }
+                    catch (Exception ex) { modelResult = "API key test failed: " + ex.Message; }
+                    return modelResult + Environment.NewLine + client.TestBalanceAccess();
+                });
                 SetApiStatus(result);
             }
             catch (Exception ex)

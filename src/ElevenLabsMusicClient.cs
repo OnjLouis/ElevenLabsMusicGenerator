@@ -27,6 +27,7 @@ namespace ElevenLabsMusicGenerator
     {
         private const string DefaultApiRoot = "https://api.elevenlabs.io";
         private const int RequestTimeoutMilliseconds = 20 * 60 * 1000;
+        private const int MaxKeyTestAudioBytes = 1024 * 1024;
         private readonly string apiKey;
         private readonly string apiRoot;
 
@@ -41,10 +42,51 @@ namespace ElevenLabsMusicGenerator
             if (this.apiKey.Length == 0) throw new ArgumentException("An ElevenLabs API key is required.", "apiKey");
         }
 
-        public string TestApiKey()
+        public string TestApiKey(string modelId = "music_v2_5")
         {
-            CreateCompositionPlan("A short instrumental piano phrase", 3, "music_v2_5", CancellationToken.None);
-            return "Music API key accepted. No music was generated.";
+            if (modelId == MusicGenerationRequest.SoundEffectsModel) return TestSoundEffectsKey();
+            var planModel = modelId == "music_v2" ? modelId : "music_v2_5";
+            CreateCompositionPlan("A short instrumental piano phrase", 3, planModel, CancellationToken.None);
+            return modelId == "music_v1"
+                ? "Music API key accepted through a v2.5 plan request. Music v1 was not tested directly; no music was generated."
+                : "Music API key accepted. No music was generated.";
+        }
+
+        private string TestSoundEffectsKey()
+        {
+            var request = CreateRequest(apiRoot + "/v1/sound-generation", "POST");
+            request.Timeout = 120000;
+            request.ReadWriteTimeout = 120000;
+            request.ContentType = "application/json";
+            var body = new JavaScriptSerializer().Serialize(new Dictionary<string, object>
+            {
+                { "text", "A brief soft click" }, { "duration_seconds", 0.5 },
+                { "model_id", MusicGenerationRequest.SoundEffectsModel }
+            });
+            var bytes = Encoding.UTF8.GetBytes(body);
+            request.ContentLength = bytes.Length;
+            try
+            {
+                using (var output = request.GetRequestStream()) output.Write(bytes, 0, bytes.Length);
+                using (var response = (HttpWebResponse)request.GetResponse())
+                using (var audio = response.GetResponseStream())
+                {
+                    if (!response.ContentType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidDataException("ElevenLabs did not return audio for the Sound Effects key test.");
+                    var buffer = new byte[8192];
+                    var received = 0;
+                    int count;
+                    while ((count = audio.Read(buffer, 0, buffer.Length)) > 0)
+                    {
+                        received += count;
+                        if (received > MaxKeyTestAudioBytes)
+                            throw new InvalidDataException("The Sound Effects key test returned more audio than expected.");
+                    }
+                    if (received == 0) throw new InvalidDataException("ElevenLabs returned an empty Sound Effects key test response.");
+                }
+            }
+            catch (WebException ex) { throw CreateApiException(ex); }
+            return "Sound Effects API key accepted. A 0.5-second test effect was generated and discarded; this request may have used credits.";
         }
 
         public SubscriptionBalance GetSubscriptionBalance()
@@ -59,6 +101,26 @@ namespace ElevenLabsMusicGenerator
                     return SubscriptionBalance.Parse(reader.ReadToEnd());
             }
             catch (WebException ex) { throw CreateApiException(ex); }
+        }
+
+        public string TestBalanceAccess()
+        {
+            try
+            {
+                GetSubscriptionBalance();
+                return "Credit balance access available.";
+            }
+            catch (ElevenLabsApiException ex)
+            {
+                if (ex.StatusCode == HttpStatusCode.Unauthorized || ex.StatusCode == HttpStatusCode.Forbidden)
+                    return "Credit balance unavailable. Enable the API key's user_read permission to show the balance.";
+                return "Credit balance access could not be verified (HTTP " + (int?)ex.StatusCode + "). Music and Sound Effects access are separate.";
+            }
+            catch (Exception ex)
+            {
+                AppLog.WriteException("Could not test balance access", ex);
+                return "Credit balance access could not be verified. Music and Sound Effects access are separate.";
+            }
         }
 
         public MusicCompositionPlan CreateCompositionPlan(string prompt, int lengthSeconds, string modelId, CancellationToken cancellationToken)

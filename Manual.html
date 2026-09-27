@@ -36,7 +36,7 @@ code { font-family: Consolas, monospace; }
 
 <h2 id="changelog">Changelog</h2>
 <h3>1.3.1 - Pending release</h3>
-<p>Saved composition plans, sound effect prompts, and returned track details now have readable JSON layout. Open Prompt or Plan recognizes reusable plan and details files; interrupted batches made with older compact JSON still resume safely.</p>
+<p>Saved composition plans, sound effect prompts, and returned track details now have readable JSON layout. Open Prompt or Plan recognizes reusable plan and details files; interrupted batches made with older compact JSON still resume safely. Test API key now checks the selected feature and reports credit-balance permission separately.</p>
 <h3>1.3.0 - 26 September 2026</h3>
 <p>Added a read-only balance field that refreshes on launch and after generation without generating audio. Alt+B focuses it for line-by-line reading and copying.</p>
 <h3>1.2.0 - 24 September 2026</h3>
@@ -50,13 +50,13 @@ code { font-family: Consolas, monospace; }
 </ul>
 
 <h2 id="prerequisites">Prerequisites And API Key</h2>
-<p>You need an ElevenLabs account with Music API access and sufficient credits. Sign in to <a href="https://elevenlabs.io/">ElevenLabs</a> and open <a href="https://elevenlabs.io/app/settings/api-keys">API Keys</a> under Developers. Create a key, enable Music access, and copy the full key when it is first shown. To see your balance in the app, also enable the key's <code>user_read</code> permission (read access to user information). You can edit an existing key to grant this permission. You may set a credit limit for safety. See the <a href="https://elevenlabs.io/docs/help-center/technical/how-do-i-authorize-myself-using-an-api-key">official API key guide</a>. Keep your key private; do not put it in a prompt or bug report.</p>
+<p>You need an ElevenLabs account with access to the Music or Sound Effects API you plan to use and sufficient credits. Sign in to <a href="https://elevenlabs.io/">ElevenLabs</a> and open <a href="https://elevenlabs.io/app/settings/api-keys">API Keys</a> under Developers. Create a key, enable the relevant feature access, and copy the full key when it is first shown. To see your balance in the app, also enable the key's <code>user_read</code> permission (read access to user information). You can edit an existing key to grant this permission. You may set a credit limit for safety. See the <a href="https://elevenlabs.io/docs/help-center/technical/how-do-i-authorize-myself-using-an-api-key">official API key guide</a>. Keep your key private; do not put it in a prompt or bug report.</p>
 
 <h2 id="first-run">First Run</h2>
 <ol>
 <li>Open <strong>Options, Preferences</strong>.</li>
 <li>Select the <strong>API key</strong> tab and enter your ElevenLabs API key.</li>
-<li>Use <strong>Test API key</strong> to verify it without generating music or spending credits.</li>
+<li>Use <strong>Test API key</strong> to check Music access without generating audio. Sound Effects testing asks before generating a disposable 0.5-second effect that may spend credits. The result also reports whether the key can read your credit balance.</li>
 <li>Before generating, set your preferred <strong>Default output folder</strong> on the General tab. Also choose the default duration, variations, format, and whether to save returned lyrics and details. Choose the <strong>Model</strong> in the main window with Alt+D; the last selection is remembered.</li>
 </ol>
 <p>If you leave the folder unchanged, the application creates a <code>Music</code> folder beside the executable. This location moves with the application.</p>
@@ -76,7 +76,7 @@ code { font-family: Consolas, monospace; }
 <p>If a batch was interrupted, Generate checks the existing tracks and offers to make only missing variations. The saved prompt must match, and existing WAV files must have the expected format and duration. An existing MP3's duration cannot be verified automatically, so review the confirmation carefully. If a check fails, choose a different base filename; existing tracks are never overwritten. Keep the same model and instrumental setting when resuming a batch.</p>
 
 <h2 id="sound-effects">Generating Sound Effects</h2>
-<p>In the main window, press Alt+D and choose <strong>Sound Effects v2</strong> from Model. Enter a sound description of up to 450 characters, choose a base filename and variations, then Generate. Enable Sound Effects access for your API key on ElevenLabs. Test API key checks Music access only; it does not verify Sound Effects permission.</p>
+<p>In the main window, press Alt+D and choose <strong>Sound Effects v2</strong> from Model. Enter a sound description of up to 450 characters, choose a base filename and variations, then Generate. Enable Sound Effects access for your API key on ElevenLabs. In Preferences, <strong>Test API key</strong> checks the selected feature. For Sound Effects, it first asks permission to generate and discard a 0.5-second test effect, which may spend credits. Cancel is the default choice. The separate read-only balance check reports whether <code>user_read</code> is enabled, even if the feature test fails; missing balance access does not mean generation access failed. For Music v1, the non-generating test uses a v2.5 plan request and cannot confirm v1 directly.</p>
 <p><strong>Automatic duration</strong> lets the service choose the length. Turn it off to enter 0.5 to 30 seconds. <strong>Loop sound effect</strong> requests a seamless loop. <strong>Prompt influence</strong> ranges from 0 to 1; a higher value follows your wording more closely. Sound Effects supports the app's 44.1 kHz WAV and MP3 formats. Music-only options are unavailable in this mode; switching back restores the music controls.</p>
 <p>The prompt counter shows characters used and remaining. Typing or pasting stops at the active model's limit: 450 characters for Sound Effects, 4,100 for Music. If you switch from a longer Music prompt to Sound Effects, the full Music draft is kept separately and restored when you return to Music.</p>
 <p>Sound effects use the same output folder as music. Each batch saves one <code>.sfx.json</code> containing the prompt and its settings, without lyrics files. Choose <strong>Open Prompt or Plan</strong> to reuse this file; change the base filename for a new batch. Save Prompt still saves an ordinary text copy. Resuming an interrupted batch requires matching sound-effect settings and keeps completed audio. See the <a href="https://elevenlabs.io/docs/api-reference/text-to-sound-effects/convert">Sound Effects API reference</a> for service details.</p>
@@ -96,7 +96,8 @@ code { font-family: Consolas, monospace; }
 <tr><td>Generate Music</td><td>Generated duration and number of variations.</td></tr>
 <tr><td>Generate Sound Effects with automatic duration</td><td>Each completed effect is a separate request; ElevenLabs chooses its duration.</td></tr>
 <tr><td>Generate Sound Effects with fixed duration</td><td>Requested seconds and number of variations.</td></tr>
-<tr><td>Suggest a composition plan or Test API key</td><td>No audio is generated; these actions do not spend generation credits.</td></tr></tbody></table>
+<tr><td>Suggest a composition plan, Test Music key, or check balance access</td><td>No audio is generated; these actions do not spend generation credits.</td></tr>
+<tr><td>Test Sound Effects key</td><td>After confirmation, generates and discards a 0.5-second effect; this may spend credits.</td></tr></tbody></table>
 <p>Rates and plan allowances can change. See <a href="https://elevenlabs.io/pricing/api">ElevenLabs API pricing</a> and <a href="https://help.elevenlabs.io/hc/en-us/articles/25735337678481-How-much-does-it-cost-to-generate-sound-effects">its Sound Effects cost explanation</a> before a large batch.</p>
 <p>PCM 44.1 kHz is saved as a WAV file. MP3 choices include 44.1 kHz at 128 or 192 kbps and 48 kHz at 192, 240, or 320 kbps. Actual format availability can depend on the account and API response; the service's error is shown if a requested format is not available.</p>
 

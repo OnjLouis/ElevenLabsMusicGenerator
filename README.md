@@ -4,7 +4,7 @@ Accessible Windows and Mac applications for generating music and sound effects t
 
 ## Getting started
 
-You need an ElevenLabs account with Music API access and sufficient credits. Create an API key in ElevenLabs under Developers, API Keys, and enable Music access. Enable `user_read` as well if you want the app to show your subscription balance; an existing key can be edited to grant it. You can set a credit limit for safety. In the app, open Preferences or Settings, save the key, and use Test Key before generating music. Key testing does not generate music.
+You need an ElevenLabs account with access to the Music or Sound Effects API you plan to use and sufficient credits. Create an API key in ElevenLabs under Developers, API Keys, and enable the relevant access. Enable `user_read` as well if you want the app to show your subscription balance; an existing key can be edited to grant it. You can set a credit limit for safety. In the app, open Preferences or Settings, save the key, and use Test Key before generating. Music key testing does not generate audio; Sound Effects testing asks first and may spend credits.
 
 Write a prompt, choose the model, format, duration and number of variations, then review the confirmation before spending credits. Music v2 and v2.5 also support editable composition plans with sections and lyrics. Generated audio, the shared prompt, and optional returned lyrics and details are saved in the chosen Music folder. An interrupted batch can resume missing variations without overwriting completed tracks.
 
@@ -17,6 +17,8 @@ Saved `.plan.json` files can be reopened with Open Prompt or Plan or Open Plan o
 ## Platform downloads
 
 Choose Sound Effects v2 in the model selector to generate effects instead of music. Enable Sound Effects access on your API key. Effects support automatic or fixed duration (0.5 to 30 seconds), looping, and prompt influence. Generated effects use the same output folder, with a reusable `.sfx.json` prompt that you can reload with Open Prompt. Music plans and lyrics do not apply to effects.
+
+Test API key checks the selected feature and separately reports whether the key can read the credit balance (`user_read`), even if the feature test fails. Music v2 and v2.5 use their respective non-generating plan requests; Music v1 access is checked through a v2.5 plan request. The Sound Effects test requires confirmation and generates a disposable 0.5-second effect that may spend credits.
 
 - Windows: download the Windows ZIP, extract it to a folder, and run `ElevenLabsMusicGenerator.exe`. By default, music is saved in a `Music` folder beside the app. Preferences and drafts stay with the portable app; the API key is protected for the current Windows account and computer.
 - Mac: download the Apple Silicon ZIP for an M-series Mac or the Intel ZIP for an Intel Mac, extract the app, and drag it to Applications. The first save uses `~/Music/ElevenLabs Music Generator`. The API key is stored in your Mac Keychain. Check for Updates checks published versions for a matching Mac package and offers the releases page; installation is manual.

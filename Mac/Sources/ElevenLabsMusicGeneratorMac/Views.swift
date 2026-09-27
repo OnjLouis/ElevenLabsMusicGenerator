@@ -178,6 +178,7 @@ struct SettingsView: View {
     @State private var enteredKey = ""
     @State private var hasKey = false
     @State private var keyStatus = ""
+    @State private var isTestingKey = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -212,7 +213,8 @@ struct SettingsView: View {
                     Button("Save Key") { saveKey() }
                         .accessibilityHint("Stores the entered API key in this Mac user's Keychain.")
                     Button("Test Key") { testKey() }
-                        .accessibilityHint("Checks Music API access with a composition-plan request. No music-generation credits are spent.")
+                        .disabled(isTestingKey)
+                        .accessibilityHint("Tests Music access without audio, or asks before generating a credit-using Sound Effects test.")
                     Button("Remove Key") { removeKey() }
                         .disabled(!hasKey)
                         .accessibilityHint("Removes this app's API key from Keychain.")
@@ -223,7 +225,7 @@ struct SettingsView: View {
                 Link("Get an ElevenLabs API key", destination: URL(string: "https://elevenlabs.io/app/settings/api-keys")!)
                     .accessibilityHint("Opens ElevenLabs' API key page in your default browser.")
             }
-                .padding(18).tabItem { Text("API Key").accessibilityHint("Save, test, or remove the Music API key.") }
+                .padding(18).tabItem { Text("API Key").accessibilityHint("Save, test, or remove the API key.") }
             }
             HStack {
                 Spacer()
@@ -258,12 +260,35 @@ struct SettingsView: View {
     }
 
     private func testKey() {
+        guard !isTestingKey else { return }
+        guard !enteredKey.isEmpty || hasKey else {
+            keyStatus = "Enter or save an API key first."
+            return
+        }
+        let selectedModel = model.selectedModel
+        if selectedModel == .soundEffects {
+            let alert = NSAlert()
+            alert.messageText = "Test Sound Effects API key?"
+            alert.informativeText = "ElevenLabs must generate a 0.5-second test effect to verify access. The audio will be discarded, but this request may spend credits."
+            alert.addButton(withTitle: "Cancel")
+            alert.addButton(withTitle: "Generate Test Effect")
+            guard alert.runModal() == .alertSecondButtonReturn else {
+                keyStatus = "Sound Effects key test cancelled. No request was sent."
+                return
+            }
+        }
+        isTestingKey = true
         Task {
+            defer { isTestingKey = false }
             do {
                 let key = enteredKey.isEmpty ? (try KeychainStore.read() ?? "") : enteredKey
                 guard !key.isEmpty else { throw MusicError.validation("Enter or save an API key first.") }
-                keyStatus = "Testing API key..."
-                keyStatus = try await MusicService().testKey(key)
+                keyStatus = selectedModel == .soundEffects ? "Testing Sound Effects access..." : "Testing Music access..."
+                let service = MusicService()
+                let generationResult: String
+                do { generationResult = try await service.testKey(key, model: selectedModel) }
+                catch { generationResult = "API key test failed: " + error.localizedDescription }
+                keyStatus = generationResult + "\n" + (await service.testBalanceAccess(key))
             } catch { keyStatus = error.localizedDescription }
         }
     }

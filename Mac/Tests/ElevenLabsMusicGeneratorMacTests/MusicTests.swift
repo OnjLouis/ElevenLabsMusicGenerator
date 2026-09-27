@@ -205,6 +205,100 @@ final class MusicTests: XCTestCase {
         configuration.protocolClasses = [StubProtocol.self]
         let result = try await MusicService(session: URLSession(configuration: configuration)).testKey("music-only-key")
         XCTAssertTrue(result.contains("Music API key accepted"))
+        StubProtocol.reply = { request in
+            let bodyData: Data
+            if let data = request.httpBody {
+                bodyData = data
+            } else if let stream = request.httpBodyStream {
+                stream.open()
+                defer { stream.close() }
+                var data = Data()
+                var buffer = [UInt8](repeating: 0, count: 4096)
+                while stream.hasBytesAvailable {
+                    let count = stream.read(&buffer, maxLength: buffer.count)
+                    if count <= 0 { break }
+                    data.append(contentsOf: buffer.prefix(count))
+                }
+                bodyData = data
+            } else {
+                XCTFail("Expected a JSON request body")
+                return (HTTPURLResponse(url: request.url!, statusCode: 400, httpVersion: nil,
+                    headerFields: nil)!, Data())
+            }
+            let body = try! JSONSerialization.jsonObject(with: bodyData) as! [String: Any]
+            XCTAssertEqual(body["model_id"] as? String, "music_v2")
+            return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil,
+                headerFields: nil)!, Data("{}".utf8))
+        }
+        _ = try await MusicService(session: URLSession(configuration: configuration)).testKey("music-only-key", model: .v2)
+    }
+
+    func testSoundEffectsKeyUsesMinimumDurationAndRequiresAudio() async throws {
+        defer { StubProtocol.reply = nil }
+        StubProtocol.reply = { request in
+            XCTAssertEqual(request.url?.path, "/v1/sound-generation")
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "xi-api-key"), "effects-key")
+            let bodyData: Data
+            if let data = request.httpBody {
+                bodyData = data
+            } else if let stream = request.httpBodyStream {
+                stream.open()
+                defer { stream.close() }
+                var data = Data()
+                var buffer = [UInt8](repeating: 0, count: 4096)
+                while stream.hasBytesAvailable {
+                    let count = stream.read(&buffer, maxLength: buffer.count)
+                    if count <= 0 { break }
+                    data.append(contentsOf: buffer.prefix(count))
+                }
+                bodyData = data
+            } else {
+                XCTFail("Expected a JSON request body")
+                return (HTTPURLResponse(url: request.url!, statusCode: 400, httpVersion: nil,
+                    headerFields: nil)!, Data())
+            }
+            let body = try! JSONSerialization.jsonObject(with: bodyData) as! [String: Any]
+            XCTAssertEqual(body["duration_seconds"] as? Double, 0.5)
+            XCTAssertEqual(body["model_id"] as? String, MusicModel.soundEffects.rawValue)
+            return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil,
+                headerFields: ["Content-Type": "audio/mpeg"])!, Data("ID3test-audio".utf8))
+        }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StubProtocol.self]
+        let service = MusicService(session: URLSession(configuration: configuration))
+        let result = try await service.testKey("effects-key", model: .soundEffects)
+        XCTAssertTrue(result.contains("Sound Effects API key accepted"))
+        StubProtocol.reply = { request in
+            (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"])!, Data("{}".utf8))
+        }
+        do {
+            _ = try await service.testKey("effects-key", model: .soundEffects)
+            XCTFail("A non-audio response was accepted.")
+        } catch MusicError.response { }
+    }
+
+    func testKeyBalancePermissionIsReportedSeparately() async throws {
+        defer { StubProtocol.reply = nil }
+        StubProtocol.reply = { request in
+            XCTAssertEqual(request.url?.path, "/v1/user/subscription")
+            XCTAssertEqual(request.httpMethod, "GET")
+            return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"])!,
+                Data(#"{"character_count":5,"character_limit":100,"next_character_count_reset_unix":1790796665}"#.utf8))
+        }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StubProtocol.self]
+        let service = MusicService(session: URLSession(configuration: configuration))
+        let available = await service.testBalanceAccess("test-key")
+        XCTAssertTrue(available.contains("Credit balance access available"))
+        StubProtocol.reply = { request in
+            (HTTPURLResponse(url: request.url!, statusCode: 403, httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"])!, Data("{}".utf8))
+        }
+        let restricted = await service.testBalanceAccess("test-key")
+        XCTAssertTrue(restricted.contains("user_read"))
     }
 
     func testSubscriptionBalanceRequestAndFormatting() async throws {
