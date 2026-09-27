@@ -214,7 +214,7 @@ struct SettingsView: View {
                         .accessibilityHint("Stores the entered API key in this Mac user's Keychain.")
                     Button("Test Key") { testKey() }
                         .disabled(isTestingKey)
-                        .accessibilityHint("Tests Music access without audio, or asks before generating a credit-using Sound Effects test.")
+                        .accessibilityHint("Tests API access and opens a readable result dialog. Sound Effects testing asks before generating audio that may spend credits.")
                     Button("Remove Key") { removeKey() }
                         .disabled(!hasKey)
                         .accessibilityHint("Removes this app's API key from Keychain.")
@@ -263,6 +263,7 @@ struct SettingsView: View {
         guard !isTestingKey else { return }
         guard !enteredKey.isEmpty || hasKey else {
             keyStatus = "Enter or save an API key first."
+            ApiKeyTestResultDialog.show(keyStatus)
             return
         }
         let selectedModel = model.selectedModel
@@ -289,13 +290,48 @@ struct SettingsView: View {
                 do { generationResult = try await service.testKey(key, model: selectedModel) }
                 catch { generationResult = "API key test failed: " + error.localizedDescription }
                 keyStatus = generationResult + "\n" + (await service.testBalanceAccess(key))
-            } catch { keyStatus = error.localizedDescription }
+            } catch { keyStatus = "API key test failed: " + error.localizedDescription }
+            ApiKeyTestResultDialog.show(keyStatus)
         }
     }
 
     private func removeKey() {
         do { try KeychainStore.delete(); hasKey = false; keyStatus = "API key removed from Keychain." }
         catch { keyStatus = error.localizedDescription }
+    }
+}
+
+enum ApiKeyTestResultDialog {
+    static func make(_ result: String) -> (NSAlert, NSTextView) {
+        let alert = NSAlert()
+        alert.messageText = "API key test result"
+        alert.addButton(withTitle: "Close").keyEquivalent = "\u{1b}"
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 520, height: 140))
+        scroll.hasVerticalScroller = true
+        scroll.borderType = .bezelBorder
+        let textView = NSTextView(frame: scroll.bounds)
+        textView.isRichText = false
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.isHorizontallyResizable = false
+        textView.isVerticallyResizable = true
+        textView.textContainer?.widthTracksTextView = true
+        textView.autoresizingMask = [.width]
+        textView.font = .systemFont(ofSize: NSFont.systemFontSize)
+        textView.string = result
+        textView.setAccessibilityLabel("API key test result")
+        textView.setAccessibilityHelp("Read by line with the arrow keys, or select and copy the text.")
+        scroll.documentView = textView
+        alert.accessoryView = scroll
+        alert.window.initialFirstResponder = textView
+        return (alert, textView)
+    }
+
+    static func show(_ result: String) {
+        let (alert, textView) = make(result)
+        let window = alert.window
+        DispatchQueue.main.async { window.makeFirstResponder(textView) }
+        alert.runModal()
     }
 }
 

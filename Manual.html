@@ -36,7 +36,7 @@ code { font-family: Consolas, monospace; }
 
 <h2 id="changelog">Changelog</h2>
 <h3>1.3.1 - Pending release</h3>
-<p>Saved composition plans, sound effect prompts, and returned track details now have readable JSON layout. Open Prompt or Plan recognizes reusable plan and details files; interrupted batches made with older compact JSON still resume safely. Test API key now checks the selected feature and reports credit-balance permission separately.</p>
+<p>Saved composition plans, sound effect prompts, and returned track details now have readable JSON layout. Open Prompt or Plan recognizes reusable plan and details files; interrupted batches made with older compact JSON still resume safely. Test API key now checks the selected feature and reports credit-balance permission in a readable result dialog.</p>
 <h3>1.3.0 - 26 September 2026</h3>
 <p>Added a read-only balance field that refreshes on launch and after generation without generating audio. Alt+B focuses it for line-by-line reading and copying.</p>
 <h3>1.2.0 - 24 September 2026</h3>
@@ -56,7 +56,7 @@ code { font-family: Consolas, monospace; }
 <ol>
 <li>Open <strong>Options, Preferences</strong>.</li>
 <li>Select the <strong>API key</strong> tab and enter your ElevenLabs API key.</li>
-<li>Use <strong>Test API key</strong> to check Music access without generating audio. Sound Effects testing asks before generating a disposable 0.5-second effect that may spend credits. The result also reports whether the key can read your credit balance.</li>
+<li>Use <strong>Test API key</strong> to check Music access without generating audio. Sound Effects testing asks before generating a disposable 0.5-second effect that may spend credits. A result dialog opens with a focused read-only field so you can read or copy each result, including whether the key can read your credit balance. Press Escape or choose Close to return to Preferences.</li>
 <li>Before generating, set your preferred <strong>Default output folder</strong> on the General tab. Also choose the default duration, variations, format, and whether to save returned lyrics and details. Choose the <strong>Model</strong> in the main window with Alt+D; the last selection is remembered.</li>
 </ol>
 <p>If you leave the folder unchanged, the application creates a <code>Music</code> folder beside the executable. This location moves with the application.</p>

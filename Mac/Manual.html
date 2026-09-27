@@ -17,7 +17,7 @@
 <li><a href="#credits">Credits</a></li></ul>
 <h2 id="changelog">Changelog</h2>
 <h3>1.3.1 - Pending release</h3>
-<p>Saved composition plans, sound effect prompts, and returned track details now have readable JSON layout. Open Prompt recognizes reusable plan and details files; interrupted batches made with older compact JSON still resume safely. Test Key now checks the selected feature and reports credit-balance permission separately.</p>
+<p>Saved composition plans, sound effect prompts, and returned track details now have readable JSON layout. Open Prompt recognizes reusable plan and details files; interrupted batches made with older compact JSON still resume safely. Test Key now checks the selected feature and reports credit-balance permission in a readable result dialog.</p>
 <h3>1.3.0 - 26 September 2026</h3>
 <p>Added a read-only balance field that refreshes on launch and after generation without generating audio. Option-B focuses it for line-by-line reading and copying.</p>
 <h3>1.2.0 - 24 September 2026</h3>
@@ -34,7 +34,7 @@
 <p>The key is stored in this Mac user's Keychain, not in the application folder, preferences, a prompt, or a log. Do not include a real key in a bug report or share it with another person. ElevenLabs explains key creation and restrictions in its <a href="https://elevenlabs.io/docs/help-center/technical/how-do-i-authorize-myself-using-an-api-key">API key guide</a>.</p>
 <h2 id="first-run">First Run</h2>
 <ol><li>Open <strong>ElevenLabs Music Generator, Settings</strong>.</li>
-<li>On the API Key tab, paste your key, choose <strong>Save Key</strong>, then <strong>Test Key</strong>. Music testing does not generate audio. Sound Effects testing asks before generating a disposable 0.5-second effect that may spend credits. The result also reports whether the key can read your credit balance.</li>
+<li>On the API Key tab, paste your key, choose <strong>Save Key</strong>, then <strong>Test Key</strong>. Music testing does not generate audio. Sound Effects testing asks before generating a disposable 0.5-second effect that may spend credits. A result dialog opens with a focused read-only field so you can read or copy each result, including whether the key can read your credit balance. Press Escape or choose Close to return to Settings.</li>
 <li>Before generating, set your preferred <strong>Music folder</strong> on the General tab. Also choose whether to save returned lyrics and details.</li></ol>
 <p>If you leave the folder unchanged, the app saves to <code>~/Music/ElevenLabs Music Generator</code>. The first save creates the selected folder if it does not already exist.</p>
 <h2 id="generating-music">Generating Music</h2>

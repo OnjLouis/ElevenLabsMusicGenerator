@@ -75,7 +75,7 @@ namespace ElevenLabsMusicGenerator
             apiKeyTextBox.UseSystemPasswordChar = true;
             showKeyCheckBox = new CheckBox { Text = "&Show API key", AutoSize = true, AccessibleName = "Show API key" };
             showKeyCheckBox.CheckedChanged += delegate { apiKeyTextBox.UseSystemPasswordChar = !showKeyCheckBox.Checked; };
-            testKeyButton = NewButton("&Test API key", "Test Music access without generating audio, or confirm a credit-using Sound Effects test");
+            testKeyButton = NewButton("&Test API key", "Test API access and open a readable result dialog; Sound Effects testing asks before generating audio that may spend credits");
             testKeyButton.Click += TestKeyButtonClick;
             var getKeyLink = new LinkLabel
             {
@@ -215,7 +215,7 @@ namespace ElevenLabsMusicGenerator
             var key = apiKeyTextBox.Text.Trim();
             if (key.Length == 0)
             {
-                SetApiStatus("Enter an API key before testing it.");
+                ShowApiTestResult("Enter an API key before testing it.");
                 apiKeyTextBox.Focus();
                 return;
             }
@@ -239,16 +239,22 @@ namespace ElevenLabsMusicGenerator
                     catch (Exception ex) { modelResult = "API key test failed: " + ex.Message; }
                     return modelResult + Environment.NewLine + client.TestBalanceAccess();
                 });
-                SetApiStatus(result);
+                ShowApiTestResult(result);
             }
             catch (Exception ex)
             {
-                SetApiStatus("API key test failed: " + ex.Message);
+                ShowApiTestResult("API key test failed: " + ex.Message);
             }
             finally
             {
                 testKeyButton.Enabled = true;
             }
+        }
+
+        private void ShowApiTestResult(string result)
+        {
+            SetApiStatus(result);
+            using (var dialog = new ApiKeyTestResultForm(result)) dialog.ShowDialog(this);
         }
 
         private void SetApiStatus(string message)

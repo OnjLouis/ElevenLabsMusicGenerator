@@ -63,6 +63,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 Run("Preferences button order", TestPreferencesButtonOrder);
                 Run("API error preserves status and message", TestApiErrorPreservesStatus);
                 Run("Accessible control structure", TestAccessibleControlStructure);
+                Run("Focusable API key test result", TestApiKeyTestResultDialog);
                 Run("Manual contents and changelog", TestManualNavigation);
                 Run("Composition plan validation and round trip", TestCompositionPlan);
                 Run("Readable JSON and legacy batch resume", TestReadableJsonAndLegacyResume);
@@ -1334,6 +1335,23 @@ namespace ElevenLabsMusicGenerator.Tests
                 Assert(controls.OfType<TextBox>().Any(control => control.AccessibleName == "ElevenLabs API key" && control.UseSystemPasswordChar), "Masked API key control is missing.");
                 Assert(controls.OfType<LinkLabel>().Any(control => control.AccessibleName == "Get an ElevenLabs API key" && control.TabStop), "Focusable API key help link is missing.");
                 Assert(controls.OfType<ComboBox>().Any(control => control.AccessibleName == "Check for updates"), "Update preference is missing.");
+            }
+        }
+
+        private static void TestApiKeyTestResultDialog()
+        {
+            using (var dialog = new ApiKeyTestResultForm("Music API key accepted." + Environment.NewLine + "Credit balance access available."))
+            {
+                dialog.StartPosition = FormStartPosition.Manual;
+                dialog.Location = new System.Drawing.Point(-2000, -2000);
+                dialog.Show();
+                Application.DoEvents();
+                var result = Descendants(dialog).OfType<TextBox>().Single(control => control.AccessibleName == "API key test result");
+                var close = Descendants(dialog).OfType<Button>().Single(control => control.Text == "&Close");
+                Assert(result.ReadOnly && result.Multiline && result.TabStop && result.Focused, "The key result must open in a focused read-only edit.");
+                Assert(result.Text.Contains("Music API key accepted") && result.Text.Contains("Credit balance access available"), "The dialog lost part of the key test result.");
+                Assert(dialog.AcceptButton == close && dialog.CancelButton == close, "Enter and Escape must close the key result dialog.");
+                dialog.Close();
             }
         }
 

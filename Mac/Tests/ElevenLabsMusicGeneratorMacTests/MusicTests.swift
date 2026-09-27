@@ -1,8 +1,20 @@
+import AppKit
 import Foundation
 import XCTest
 @testable import ElevenLabsMusicGeneratorMac
 
 final class MusicTests: XCTestCase {
+    func testApiKeyResultIsReadableAndFocusable() {
+        let (alert, textView) = ApiKeyTestResultDialog.make("Music API key accepted.\nCredit balance access available.")
+        XCTAssertFalse(textView.isEditable)
+        XCTAssertTrue(textView.isSelectable)
+        XCTAssertEqual(textView.string, "Music API key accepted.\nCredit balance access available.")
+        XCTAssertEqual(textView.accessibilityLabel(), "API key test result")
+        XCTAssertTrue(alert.accessoryView is NSScrollView)
+        XCTAssertTrue(alert.window.initialFirstResponder === textView)
+        XCTAssertEqual(alert.buttons.first?.title, "Close")
+    }
+
     func testPromptDraftMigrationAndRoundTrip() throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("elevenlabs-drafts-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
