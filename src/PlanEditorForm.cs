@@ -133,9 +133,9 @@ namespace ElevenLabsMusicGenerator
             loadingSection = true;
             nameBox.Text = section.Name;
             durationBox.Value = Math.Max(durationBox.Minimum, Math.Min(durationBox.Maximum, section.DurationMilliseconds / 1000m));
-            wordsBox.Text = section.Body;
-            positiveBox.Text = section.PositiveStyles;
-            negativeBox.Text = section.NegativeStyles;
+            wordsBox.Text = ForWindowsEdit(section.Body);
+            positiveBox.Text = ForWindowsEdit(section.PositiveStyles);
+            negativeBox.Text = ForWindowsEdit(section.NegativeStyles);
             adherenceBox.SelectedItem = section.ContextAdherence;
             loadingSection = false;
             SetStatus("Section " + (sectionList.SelectedIndex + 1) + " of " + workingPlan.Sections.Count + ". Total " + workingPlan.TotalSeconds + " seconds.");
@@ -147,9 +147,9 @@ namespace ElevenLabsMusicGenerator
             var section = workingPlan.Sections[sectionList.SelectedIndex];
             section.Name = nameBox.Text;
             section.DurationMilliseconds = decimal.ToInt32(durationBox.Value * 1000m);
-            section.Body = wordsBox.Text;
-            section.PositiveStyles = positiveBox.Text;
-            section.NegativeStyles = negativeBox.Text;
+            section.Body = ForPlan(wordsBox.Text);
+            section.PositiveStyles = ForPlan(positiveBox.Text);
+            section.NegativeStyles = ForPlan(negativeBox.Text);
             section.ContextAdherence = Convert.ToString(adherenceBox.SelectedItem) ?? "high";
             sectionList.Refresh();
             SetStatus("Total " + workingPlan.TotalSeconds + " seconds across " + workingPlan.Sections.Count + " sections.");
@@ -257,6 +257,16 @@ namespace ElevenLabsMusicGenerator
         {
             statusLabel.Text = text;
             statusLabel.NotifyNameChanged();
+        }
+
+        private static string ForWindowsEdit(string value)
+        {
+            return ForPlan(value).Replace("\n", Environment.NewLine);
+        }
+
+        private static string ForPlan(string value)
+        {
+            return (value ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');
         }
 
         private static TextBox NewTextBox(string accessibleName, bool multiline, int height)

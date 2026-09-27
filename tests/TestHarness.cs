@@ -59,6 +59,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 Run("Main window mnemonics", TestMainWindowMnemonics);
                 Run("Main window focus shortcuts", TestMainWindowFocusShortcuts);
                 Run("Plan editor keyboard and duration", TestPlanEditorKeyboardAndDuration);
+                Run("Plan editor displays and saves separate lines", TestPlanEditorLineEndings);
                 Run("Preferences own the output folder", TestPreferencesOwnOutputFolder);
                 Run("Preferences button order", TestPreferencesButtonOrder);
                 Run("API error preserves status and message", TestApiErrorPreservesStatus);
@@ -1297,6 +1298,43 @@ namespace ElevenLabsMusicGenerator.Tests
                     .Select(control => new { control.Text, Key = Mnemonic(control.Text) }).Where(item => item.Key.HasValue)
                     .GroupBy(item => item.Key.Value).FirstOrDefault(group => group.Count() > 1);
                 Assert(duplicate == null, "General preferences have a mnemonic clash: " + (duplicate == null ? "" : duplicate.Key.ToString()));
+            }
+        }
+
+        private static void TestPlanEditorLineEndings()
+        {
+            var plan = new MusicCompositionPlan();
+            plan.Sections.Add(new MusicSection { Name = "Intro", DurationSeconds = 15,
+                Body = "First lyric\nSecond lyric", PositiveStyles = "music box\ntoy piano",
+                NegativeStyles = "harsh noise\nloud drums" });
+            using (var editor = new PlanEditorForm(plan, "", 15, "music_v2_5", AppPaths.AppFolder, ""))
+            {
+                editor.StartPosition = FormStartPosition.Manual;
+                editor.Location = new System.Drawing.Point(-2000, -2000);
+                editor.Show();
+                Application.DoEvents();
+                var boxes = Descendants(editor).OfType<TextBox>().ToList();
+                var lyrics = boxes.Single(box => box.AccessibleName == "Lyrics and short directions");
+                var include = boxes.Single(box => box.AccessibleName == "Include styles, one per line");
+                var exclude = boxes.Single(box => box.AccessibleName == "Exclude styles, one per line");
+                Assert(lyrics.GetLineFromCharIndex(lyrics.Text.IndexOf("Second lyric", StringComparison.Ordinal)) == 1,
+                    "Lyrics from a plan are not separate native edit-control lines.");
+                Assert(include.GetLineFromCharIndex(include.Text.IndexOf("toy piano", StringComparison.Ordinal)) == 1,
+                    "Included styles from a plan are not separate native edit-control lines.");
+                Assert(exclude.GetLineFromCharIndex(exclude.Text.IndexOf("loud drums", StringComparison.Ordinal)) == 1,
+                    "Excluded styles from a plan are not separate native edit-control lines.");
+                include.Text += Environment.NewLine + "soft strings";
+                var working = (MusicCompositionPlan)typeof(PlanEditorForm)
+                    .GetField("workingPlan", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(editor);
+                Assert(working.Sections[0].PositiveStyles == "music box\ntoy piano\nsoft strings",
+                    "Editing included styles changed the plan's stored line endings.");
+                Assert(working.Sections[0].Body == "First lyric\nSecond lyric" &&
+                    working.Sections[0].NegativeStyles == "harsh noise\nloud drums",
+                    "Editing styles changed the line endings in another plan field.");
+                var payload = (string[])working.Sections[0].ToPayload()["positive_styles"];
+                Assert(payload.SequenceEqual(new[] { "music box", "toy piano", "soft strings" }),
+                    "The edited style lines did not reach the API payload as separate styles.");
+                editor.Close();
             }
         }
 
