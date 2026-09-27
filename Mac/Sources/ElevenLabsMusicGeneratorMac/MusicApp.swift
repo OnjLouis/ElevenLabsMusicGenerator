@@ -41,7 +41,9 @@ struct ElevenLabsMusicGeneratorApp: App {
             }
             CommandMenu("Controls") {
                 Button("Focus Balance") { model.focusBalance() }
-                    .keyboardShortcut("b", modifiers: .option)
+                    .keyboardShortcut("b", modifiers: .command)
+                Button("Focus Status Log") { model.focusStatus() }
+                    .keyboardShortcut("t", modifiers: .command)
                 Button("Refresh Balance") { model.checkBalance() }
                     .keyboardShortcut("r", modifiers: .command)
                     .disabled(model.checkingBalance)

@@ -38,6 +38,7 @@ final class AppModel: ObservableObject {
     @Published var balanceText = "Not checked yet. Press Command-R to refresh the balance."
     @Published var checkingBalance = false
     @Published var balanceFocusRequest = 0
+    @Published var statusFocusRequest = 0
     @Published var completed: [URL] = []
     @Published var focusRequest: MainFocusRequest?
 
@@ -408,6 +409,7 @@ final class AppModel: ObservableObject {
     }
 
     func focusBalance() { balanceFocusRequest += 1 }
+    func focusStatus() { statusFocusRequest += 1 }
 
     func checkUpdatesOnLaunch() {
         guard !checkedUpdatesOnLaunch, preferences.autoUpdateOnLaunch == true else { return }

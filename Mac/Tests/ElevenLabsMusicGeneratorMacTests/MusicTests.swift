@@ -4,6 +4,24 @@ import XCTest
 @testable import ElevenLabsMusicGeneratorMac
 
 final class MusicTests: XCTestCase {
+    func testMultilineEditorUsesTabForNavigation() throws {
+        let editor = TabAwareTextView(frame: .zero)
+        editor.string = "First line\nSecond line"
+        var movedForward = 0
+        var movedBackward = 0
+        editor.tabAction = { movedForward += 1 }
+        editor.backTabAction = { movedBackward += 1 }
+        for modifiers: NSEvent.ModifierFlags in [[], [.shift]] {
+            let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero,
+                modifierFlags: modifiers, timestamp: 0, windowNumber: 0, context: nil,
+                characters: "\t", charactersIgnoringModifiers: "\t", isARepeat: false, keyCode: 48))
+            editor.keyDown(with: event)
+        }
+        XCTAssertEqual(movedForward, 1)
+        XCTAssertEqual(movedBackward, 1)
+        XCTAssertEqual(editor.string, "First line\nSecond line")
+    }
+
     func testApiKeyResultIsReadableAndFocusable() {
         let (alert, textView) = ApiKeyTestResultDialog.make("Music API key accepted.\nCredit balance access available.")
         XCTAssertFalse(textView.isEditable)

@@ -22,7 +22,7 @@ struct MainView: View {
             Text("Balance").font(.headline)
             KeyboardTextView(text: .constant(model.balanceText), editable: false,
                 accessibilityLabel: "Credit balance",
-                accessibilityHelp: "Latest ElevenLabs credit balance. Read by line with the arrow keys or copy selected text. Option-B focuses this field.",
+                accessibilityHelp: "Command-B. Shows remaining balance and credit usage. Read or copy one line at a time.",
                 onTab: { focusTextView(statusView) },
                 onBackTab: {
                     if let balanceView { balanceView.window?.selectPreviousKeyView(balanceView) }
@@ -32,7 +32,7 @@ struct MainView: View {
             Text("Status").font(.headline)
             KeyboardTextView(text: .constant(model.status.joined(separator: "\n")), editable: false,
                 accessibilityLabel: "Status log",
-                accessibilityHelp: "Generation and error messages, newest last.",
+                accessibilityHelp: "Command-T. Generation and error log, newest last. Read or copy one line at a time.",
                 onTab: { focusTextView(promptView) },
                 onBackTab: { focusTextView(balanceView) },
                 onReady: { statusView = $0 })
@@ -161,6 +161,7 @@ struct MainView: View {
         }
         .task { model.checkUpdatesOnLaunch(); model.checkBalance() }
         .onChange(of: model.balanceFocusRequest) { _, _ in focusTextView(balanceView) }
+        .onChange(of: model.statusFocusRequest) { _, _ in focusTextView(statusView) }
         .onChange(of: model.focusRequest) { _, request in
             guard let request else { return }
             focus = request.control == .model ? .model : .outputFormat
@@ -339,6 +340,12 @@ struct PlanEditorView: View {
     @ObservedObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var selectedID: UUID?
+    @State private var lyricsView: TabAwareTextView?
+    @State private var includedStylesView: TabAwareTextView?
+    @State private var excludedStylesView: TabAwareTextView?
+    @FocusState private var focus: PlanFocus?
+
+    private enum PlanFocus { case duration, adherence }
 
     private var selectedIndex: Int? { model.plan?.sections.firstIndex(where: { $0.id == selectedID }) }
 
@@ -403,25 +410,42 @@ struct PlanEditorView: View {
         TextField("Section name", text: binding(index, \.name))
             .accessibilityHint("Name this part of the song, such as Verse or Chorus.")
         TextField("Duration, milliseconds", value: binding(index, \.durationMilliseconds), format: .number)
+            .focused($focus, equals: .duration)
             .accessibilityHint("Length of this section in milliseconds.")
         Text("Lyrics and musical cues")
-        TextEditor(text: binding(index, \.body))
+        KeyboardTextView(text: binding(index, \.body), editable: true,
+            accessibilityLabel: "Lyrics and musical cues",
+            accessibilityHelp: "Enter lyrics or performance directions for this section.",
+            onTab: { focusTextView(includedStylesView) },
+            onBackTab: { focus = .duration },
+            onReady: { lyricsView = $0 })
             .frame(minHeight: 120)
-            .overlay(RoundedRectangle(cornerRadius: 5).stroke(.separator))
-            .accessibilityLabel("Lyrics and musical cues")
-            .accessibilityHint("Enter lyrics or performance directions for this section.")
-        TextField("Included styles, one per line", text: binding(index, \.positiveStyles), axis: .vertical)
-            .lineLimit(2...4)
-            .accessibilityHint("Enter one desired style per line.")
-        TextField("Excluded styles, one per line", text: binding(index, \.negativeStyles), axis: .vertical)
-            .lineLimit(2...4)
-            .accessibilityHint("Enter one style to avoid per line.")
+        KeyboardTextView(text: binding(index, \.positiveStyles), editable: true,
+            accessibilityLabel: "Included styles, one per line",
+            accessibilityHelp: "Enter one desired style per line.",
+            onTab: { focusTextView(excludedStylesView) },
+            onBackTab: { focusTextView(lyricsView) },
+            onReady: { includedStylesView = $0 })
+            .frame(height: 72)
+        KeyboardTextView(text: binding(index, \.negativeStyles), editable: true,
+            accessibilityLabel: "Excluded styles, one per line",
+            accessibilityHelp: "Enter one style to avoid per line.",
+            onTab: { focus = .adherence },
+            onBackTab: { focusTextView(includedStylesView) },
+            onReady: { excludedStylesView = $0 })
+            .frame(height: 72)
         Picker("Context adherence", selection: binding(index, \.contextAdherence)) {
             Text("Low").tag("low")
             Text("Medium").tag("medium")
             Text("High").tag("high")
         }
+        .focused($focus, equals: .adherence)
         .accessibilityHint("Choose how closely this section should follow the preceding music.")
+    }
+
+    private func focusTextView(_ view: TabAwareTextView?) {
+        guard let view else { return }
+        view.window?.makeFirstResponder(view)
     }
 
     private func binding<Value>(_ index: Int, _ keyPath: WritableKeyPath<MusicSection, Value>) -> Binding<Value> {
