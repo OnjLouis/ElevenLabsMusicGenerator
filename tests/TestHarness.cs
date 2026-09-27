@@ -1405,6 +1405,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 var balance = Descendants(form).OfType<TextBox>().Single(control => control.AccessibleName == "Credit balance");
                 var status = Descendants(form).OfType<TextBox>().Single(control => control.AccessibleName == "Status log");
                 Assert(balance.ReadOnly && balance.Multiline && balance.TabStop, "The balance must be a focusable read-only multiline edit.");
+                Assert(string.IsNullOrEmpty(balance.AccessibleDescription), "The balance should not repeat screen-reader editing instructions.");
                 Assert(balance.TabIndex < status.TabIndex && balance.Parent == status.Parent, "The balance must immediately precede the status log in keyboard order.");
                 Assert(!status.Text.Contains("Included allowance") && !status.Text.Contains("Checking ElevenLabs subscription balance"),
                     "The balance must not be written into the status log.");
@@ -1447,7 +1448,7 @@ namespace ElevenLabsMusicGenerator.Tests
             var html = File.ReadAllText(AppPaths.ManualPath, Encoding.UTF8);
             Assert(html.Contains("<h2 id=\"changelog\">Changelog</h2>"), "The manual does not place a changelog near the top.");
             Assert(html.Contains("<h3>" + Program.Version + " - "), "The current version is missing from the manual changelog.");
-            Assert(html.Contains("Refresh Balance") && html.Contains("Alt+B") && html.Contains("F5") &&
+            Assert(html.Contains("Balance refreshes") && html.Contains("Alt+B") && html.Contains("F5") &&
                 html.Contains("user/subscription/get"), "The manual does not explain automatic balance display and refresh.");
             Assert(html.Contains("Ctrl+F1"), "The project page shortcut is missing from the manual.");
             Assert(html.Contains("<h2 id=\"credits\">Credits</h2>"), "The manual has no credits section.");

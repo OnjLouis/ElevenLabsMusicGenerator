@@ -3,6 +3,8 @@ import Foundation
 struct PublishedMacRelease {
     let version: String
     let page: URL
+    let downloadURL: URL
+    let assetName: String
 }
 
 enum MacPackageArchitecture {
@@ -40,11 +42,15 @@ enum ReleaseCatalog {
                   let pageText = item["html_url"] as? String,
                   let page = URL(string: pageText), page.scheme == "https", page.host == "github.com",
                   let assets = item["assets"] as? [[String: Any]],
-                  assets.contains(where: { asset in
-                      guard let name = asset["name"] as? String else { return false }
-                      return name == architecture.assetName(version: parts.map(String.init).joined(separator: "."))
-                  }) else { return nil }
-            return (PublishedMacRelease(version: parts.map(String.init).joined(separator: "."), page: page), parts)
+                  let asset = assets.first(where: { asset in
+                      asset["name"] as? String == architecture.assetName(version: parts.map(String.init).joined(separator: "."))
+                  }),
+                  let name = asset["name"] as? String,
+                  let downloadText = asset["browser_download_url"] as? String,
+                  let downloadURL = URL(string: downloadText),
+                  downloadURL.absoluteString == "https://github.com/OnjLouis/ElevenLabsMusicGenerator/releases/download/\(tag)/\(name)" else { return nil }
+            return (PublishedMacRelease(version: parts.map(String.init).joined(separator: "."), page: page,
+                                        downloadURL: downloadURL, assetName: name), parts)
         }.max(by: { $0.parts.lexicographicallyPrecedes($1.parts) })?.release
     }
 

@@ -166,7 +166,7 @@ namespace ElevenLabsMusicGenerator
             var balanceLabel = new Label { Text = "&Balance:", AutoSize = true, UseMnemonic = true };
             balanceTextBox = new TextBox { Dock = DockStyle.Top, ReadOnly = true, Multiline = true, ScrollBars = ScrollBars.Vertical,
                 Height = 70, TabStop = true, TabIndex = 0, Text = "Not checked. Press F5 to refresh your balance.",
-                AccessibleName = "Credit balance", AccessibleDescription = "Latest ElevenLabs credit balance. Use arrow keys to read each line or Ctrl+C to copy." };
+                AccessibleName = "Credit balance" };
             var statusLabel = new Label { Text = "&Status log:", AutoSize = true, UseMnemonic = true };
             progressBar = new ProgressBar { Dock = DockStyle.Top, Height = 18, Style = ProgressBarStyle.Continuous, AccessibleName = "Generation progress" };
             statusTextBox = new AccessibleStatusTextBox { Dock = DockStyle.Top, ReadOnly = true, Multiline = true, ScrollBars = ScrollBars.Vertical, Height = 90, TabStop = true, TabIndex = 1, Text = "Ready.", AccessibleName = "Status log", ShortcutText = "Alt+S" };

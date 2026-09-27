@@ -11,6 +11,7 @@ struct AppPreferences: Codable {
     var format = AudioFormat.wav.rawValue
     var includeDetails = true
     var autoUpdateOnLaunch: Bool? = true
+    var installUpdatesSilently: Bool? = false
     var soundEffects: SoundEffectOptions?
     var effects: SoundEffectOptions {
         get { soundEffects ?? SoundEffectOptions() }

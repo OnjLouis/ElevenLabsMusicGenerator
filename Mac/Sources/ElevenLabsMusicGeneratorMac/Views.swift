@@ -199,9 +199,14 @@ struct SettingsView: View {
                 Toggle("Save generated lyrics and details", isOn: $model.preferences.includeDetails)
                     .accessibilityHint("Save returned lyrics and metadata beside the music in a Lyrics folder.")
                 Toggle("Check for updates when the app opens", isOn: Binding(
-                    get: { model.preferences.autoUpdateOnLaunch == true },
+                    get: { model.preferences.autoUpdateOnLaunch != false },
                     set: { model.preferences.autoUpdateOnLaunch = $0 }))
-                    .accessibilityHint("New versions are announced; installation remains your choice.")
+                    .accessibilityHint("Check for newer signed Mac releases each time the app opens.")
+                Toggle("Install updates silently", isOn: Binding(
+                    get: { model.preferences.installUpdatesSilently == true },
+                    set: { model.preferences.installUpdatesSilently = $0 }))
+                    .disabled(model.preferences.autoUpdateOnLaunch == false)
+                    .accessibilityHint("When enabled, verified updates found at startup install and relaunch without asking. Off by default.")
                 Text("The folder is created when music or a prompt is first saved.")
                     .foregroundStyle(.secondary)
             }

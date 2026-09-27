@@ -50,6 +50,7 @@ final class AppModel: ObservableObject {
     private var longMusicPrompt: String?
     private var soundEffectPrompt: String?
     private var checkedUpdatesOnLaunch = false
+    private var checkingUpdates = false
     private var balanceRefreshPending = false
     private var skipNextModelDraftCapture = false
     private let service = MusicService()
@@ -412,13 +413,16 @@ final class AppModel: ObservableObject {
     func focusStatus() { statusFocusRequest += 1 }
 
     func checkUpdatesOnLaunch() {
-        guard !checkedUpdatesOnLaunch, preferences.autoUpdateOnLaunch == true else { return }
+        guard !checkedUpdatesOnLaunch, preferences.autoUpdateOnLaunch != false else { return }
         checkedUpdatesOnLaunch = true
         checkUpdates(automatic: true)
     }
 
     func checkUpdates(automatic: Bool = false) {
+        guard !checkingUpdates else { return }
+        checkingUpdates = true
         Task {
+            defer { checkingUpdates = false }
             do {
                 let url = URL(string: "https://api.github.com/repos/OnjLouis/ElevenLabsMusicGenerator/releases?per_page=100")!
                 var request = URLRequest(url: url)
@@ -442,13 +446,27 @@ final class AppModel: ObservableObject {
                     if !automatic { notice = AppNotice(title: "Check for Updates", message: "ElevenLabs Music Generator \(current) is up to date.") }
                     return
                 }
+                if automatic && preferences.installUpdatesSilently == true {
+                    addStatus("Installing verified update \(release.version).")
+                    try await MacUpdateInstaller.start(release)
+                    return
+                }
                 let alert = NSAlert()
                 alert.messageText = "Version \(release.version) is available"
-                alert.informativeText = "Open the official releases page to download the Mac ZIP? The app will not install it automatically."
-                alert.addButton(withTitle: "Open Releases")
+                alert.informativeText = "Download and install the signed Mac update, then relaunch the app?"
+                alert.addButton(withTitle: "Install")
+                alert.addButton(withTitle: "Version History")
                 alert.addButton(withTitle: "Later")
-                if alert.runModal() == .alertFirstButtonReturn && !NSWorkspace.shared.open(release.page) {
-                    throw MusicError.response("Could not open the releases page in your browser.")
+                switch alert.runModal() {
+                case .alertFirstButtonReturn:
+                    addStatus("Installing verified update \(release.version).")
+                    try await MacUpdateInstaller.start(release)
+                case .alertSecondButtonReturn:
+                    if !NSWorkspace.shared.open(release.page) {
+                        throw MusicError.response("Could not open version history in your browser.")
+                    }
+                default:
+                    break
                 }
             } catch {
                 if automatic { addStatus("Automatic update check could not finish: \(error.localizedDescription)") }

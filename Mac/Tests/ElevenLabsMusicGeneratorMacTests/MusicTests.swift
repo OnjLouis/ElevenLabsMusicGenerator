@@ -115,8 +115,8 @@ final class MusicTests: XCTestCase {
           {"tag_name":"v9.0.0","draft":true,"prerelease":false,"html_url":"https://github.com/OnjLouis/ElevenLabsMusicGenerator/releases/tag/v9.0.0","assets":[{"name":"ElevenLabs-Music-Generator-Mac-9.0.0.zip"}]},
           {"tag_name":"v3.0.0","draft":false,"prerelease":true,"html_url":"https://github.com/OnjLouis/ElevenLabsMusicGenerator/releases/tag/v3.0.0","assets":[{"name":"ElevenLabs-Music-Generator-Mac-3.0.0.zip"}]},
           {"tag_name":"v2.0.0","draft":false,"prerelease":false,"html_url":"https://github.com/OnjLouis/ElevenLabsMusicGenerator/releases/tag/v2.0.0","assets":[{"name":"ElevenLabsMusicGenerator.zip"}]},
-          {"tag_name":"v1.2.0","draft":false,"prerelease":false,"html_url":"https://github.com/OnjLouis/ElevenLabsMusicGenerator/releases/tag/v1.2.0","assets":[{"name":"ElevenLabs-Music-Generator-Mac-1.2.0.zip"}]},
-          {"tag_name":"v1.1.0","draft":false,"prerelease":false,"html_url":"https://github.com/OnjLouis/ElevenLabsMusicGenerator/releases/tag/v1.1.0","assets":[{"name":"ElevenLabs-Music-Generator-Mac-1.1.0.zip"}]}
+          {"tag_name":"v1.2.0","draft":false,"prerelease":false,"html_url":"https://github.com/OnjLouis/ElevenLabsMusicGenerator/releases/tag/v1.2.0","assets":[{"name":"ElevenLabs-Music-Generator-Mac-1.2.0.zip","browser_download_url":"https://github.com/OnjLouis/ElevenLabsMusicGenerator/releases/download/v1.2.0/ElevenLabs-Music-Generator-Mac-1.2.0.zip"}]},
+          {"tag_name":"v1.1.0","draft":false,"prerelease":false,"html_url":"https://github.com/OnjLouis/ElevenLabsMusicGenerator/releases/tag/v1.1.0","assets":[{"name":"ElevenLabs-Music-Generator-Mac-1.1.0.zip","browser_download_url":"https://github.com/OnjLouis/ElevenLabsMusicGenerator/releases/download/v1.1.0/ElevenLabs-Music-Generator-Mac-1.1.0.zip"}]}
         ]
         """
         let data = Data(json.utf8)
@@ -128,8 +128,8 @@ final class MusicTests: XCTestCase {
     func testIntelReleaseCheckRequiresIntelPackage() throws {
         let json = """
         [
-          {"tag_name":"v1.3.0","draft":false,"prerelease":false,"html_url":"https://github.com/OnjLouis/ElevenLabsMusicGenerator/releases/tag/v1.3.0","assets":[{"name":"ElevenLabs-Music-Generator-Mac-1.3.0.zip"}]},
-          {"tag_name":"v1.2.0","draft":false,"prerelease":false,"html_url":"https://github.com/OnjLouis/ElevenLabsMusicGenerator/releases/tag/v1.2.0","assets":[{"name":"ElevenLabs-Music-Generator-Mac-Intel-1.2.0.zip"}]}
+          {"tag_name":"v1.3.0","draft":false,"prerelease":false,"html_url":"https://github.com/OnjLouis/ElevenLabsMusicGenerator/releases/tag/v1.3.0","assets":[{"name":"ElevenLabs-Music-Generator-Mac-1.3.0.zip","browser_download_url":"https://github.com/OnjLouis/ElevenLabsMusicGenerator/releases/download/v1.3.0/ElevenLabs-Music-Generator-Mac-1.3.0.zip"}]},
+          {"tag_name":"v1.2.0","draft":false,"prerelease":false,"html_url":"https://github.com/OnjLouis/ElevenLabsMusicGenerator/releases/tag/v1.2.0","assets":[{"name":"ElevenLabs-Music-Generator-Mac-Intel-1.2.0.zip","browser_download_url":"https://github.com/OnjLouis/ElevenLabsMusicGenerator/releases/download/v1.2.0/ElevenLabs-Music-Generator-Mac-Intel-1.2.0.zip"}]}
         ]
         """
         let data = Data(json.utf8)
@@ -144,6 +144,24 @@ final class MusicTests: XCTestCase {
         #else
         XCTAssertEqual(MacPackageArchitecture.current.assetName(version: "1.0.0"), "ElevenLabs-Music-Generator-Mac-1.0.0.zip")
         #endif
+    }
+
+    func testMacUpdaterRequiresOfficialAssetURLForSelectedArchitecture() throws {
+        let json = """
+        [
+          {"tag_name":"v1.4.0","draft":false,"prerelease":false,"html_url":"https://github.com/OnjLouis/ElevenLabsMusicGenerator/releases/tag/v1.4.0","assets":[{"name":"ElevenLabs-Music-Generator-Mac-1.4.0.zip","browser_download_url":"https://example.com/not-our-build.zip"}]},
+          {"tag_name":"v1.3.1","draft":false,"prerelease":false,"html_url":"https://github.com/OnjLouis/ElevenLabsMusicGenerator/releases/tag/v1.3.1","assets":[
+            {"name":"ElevenLabs-Music-Generator-Mac-1.3.1.zip","browser_download_url":"https://github.com/OnjLouis/ElevenLabsMusicGenerator/releases/download/v1.3.1/ElevenLabs-Music-Generator-Mac-1.3.1.zip"},
+            {"name":"ElevenLabs-Music-Generator-Mac-Intel-1.3.1.zip","browser_download_url":"https://github.com/OnjLouis/ElevenLabsMusicGenerator/releases/download/v1.3.1/ElevenLabs-Music-Generator-Mac-Intel-1.3.1.zip"}
+          ]}
+        ]
+        """
+        let data = Data(json.utf8)
+        let silicon = try XCTUnwrap(ReleaseCatalog.newerMacRelease(in: data, currentVersion: "1.3.0", architecture: .appleSilicon))
+        XCTAssertEqual(silicon.version, "1.3.1")
+        XCTAssertEqual(silicon.downloadURL.lastPathComponent, "ElevenLabs-Music-Generator-Mac-1.3.1.zip")
+        let intel = try XCTUnwrap(ReleaseCatalog.newerMacRelease(in: data, currentVersion: "1.3.0", architecture: .intel))
+        XCTAssertEqual(intel.downloadURL.lastPathComponent, "ElevenLabs-Music-Generator-Mac-Intel-1.3.1.zip")
     }
 
     private final class StubProtocol: URLProtocol {
@@ -196,8 +214,10 @@ final class MusicTests: XCTestCase {
 
     func testNewPreferencesEnableStartupChecks() throws {
         XCTAssertEqual(AppPreferences().autoUpdateOnLaunch, true)
+        XCTAssertEqual(AppPreferences().installUpdatesSilently, false)
         let old = #"{"outputFolder":"/tmp/Music","durationSeconds":60,"variations":2,"instrumental":false,"model":"music_v2_5","format":"pcm_44100","includeDetails":true}"#
         XCTAssertNil(try JSONDecoder().decode(AppPreferences.self, from: Data(old.utf8)).autoUpdateOnLaunch)
+        XCTAssertNil(try JSONDecoder().decode(AppPreferences.self, from: Data(old.utf8)).installUpdatesSilently)
     }
 
     func testKeyUsesNoCreditMusicPlanEndpoint() async throws {

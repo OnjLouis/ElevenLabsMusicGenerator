@@ -8,7 +8,7 @@ The balance field refreshes when the app opens and after generation. Command-B f
 
 Open Prompt or Open Plan or Details can reload a saved plan or generated track details containing a reusable composition plan. Saved plans, sound effect prompts, and track details use readable multi-line JSON; escaped `\n` inside a JSON string becomes a lyric line break when imported. Details without a plan are optional records and are not required to play the audio.
 
-Read the [Mac manual](Manual.html) for composition plans, keyboard commands, recovery, file locations, and manual update instructions.
+Read the [Mac manual](Manual.html) for composition plans, keyboard commands, recovery, file locations, and signed in-app update instructions.
 
 Choose Sound Effects v2 in the model selector to generate effects instead of music. Enable Sound Effects access on your API key. Effects support automatic or fixed duration (0.5 to 30 seconds), looping, and prompt influence. Generated effects use the same output folder, with a reusable `.sfx.json` prompt that you can reload with Open Prompt. Music plans and lyrics do not apply to effects.
 
