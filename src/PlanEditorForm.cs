@@ -47,6 +47,7 @@ namespace ElevenLabsMusicGenerator
             MinimumSize = new Size(800, 610);
             Size = new Size(1000, 740);
             ShowIcon = false;
+            ShowInTaskbar = false;
 
             var split = new SplitContainer { Dock = DockStyle.Fill, FixedPanel = FixedPanel.Panel1, SplitterDistance = 280 };
             var left = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Padding = new Padding(8) };

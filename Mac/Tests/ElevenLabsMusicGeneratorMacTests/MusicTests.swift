@@ -338,22 +338,26 @@ final class MusicTests: XCTestCase {
     }
 
     func testCompositionPlanRoundTrip() throws {
-        let original = CompositionPlan(sections: [MusicSection(name: "Verse", body: "First line", durationMilliseconds: 12_500,
-            positiveStyles: "jazz\nsoft", negativeStyles: "loud", contextAdherence: "high")])
+        let original = CompositionPlan(sections: [MusicSection(name: "Verse", body: "First line\nSecond line", durationMilliseconds: 12_500,
+            positiveStyles: "jazz\nsoft", negativeStyles: "loud\nharsh", contextAdherence: "high")])
         let recovered = try CompositionPlan.decodePayload(original.encodedPayload())
         XCTAssertEqual(recovered.sections.count, 1)
         XCTAssertEqual(recovered.sections[0].name, "Verse")
         XCTAssertEqual(recovered.sections[0].durationMilliseconds, 12_500)
+        XCTAssertEqual(recovered.sections[0].body, "First line\nSecond line")
+        XCTAssertEqual(recovered.sections[0].positiveStyles, "jazz\nsoft")
+        XCTAssertEqual(recovered.sections[0].negativeStyles, "loud\nharsh")
         XCTAssertEqual(MusicSection.styleLines(recovered.sections[0].positiveStyles), ["jazz", "soft"])
     }
 
     func testTrackDetailsCanReopenCompositionPlan() throws {
-        let details = Data(#"{"song_metadata":{"title":"Test"},"composition_plan":{"chunks":[{"text":"[Verse]\nSing again","duration_ms":12500,"positive_styles":["warm piano"]}]}}"#.utf8)
+        let details = Data(#"{"song_metadata":{"title":"Test"},"composition_plan":{"chunks":[{"text":"[Verse]\nSing again\nBreathe here","duration_ms":12500,"positive_styles":["warm piano","soft strings"],"negative_styles":["harsh noise","loud drums"]}]}}"#.utf8)
         let plan = try CompositionPlan.decodePayload(details)
         XCTAssertEqual(plan.sections.count, 1)
-        XCTAssertEqual(plan.sections[0].body, "Sing again")
+        XCTAssertEqual(plan.sections[0].body, "Sing again\nBreathe here")
         XCTAssertEqual(plan.sections[0].durationMilliseconds, 12_500)
-        XCTAssertEqual(plan.sections[0].positiveStyles, "warm piano")
+        XCTAssertEqual(plan.sections[0].positiveStyles, "warm piano\nsoft strings")
+        XCTAssertEqual(plan.sections[0].negativeStyles, "harsh noise\nloud drums")
         XCTAssertThrowsError(try CompositionPlan.decodePayload(Data(#"{"song_metadata":{"title":"No plan"}}"#.utf8))) { error in
             XCTAssertTrue(error.localizedDescription.contains("composition plan"))
         }

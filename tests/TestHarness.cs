@@ -1272,6 +1272,7 @@ namespace ElevenLabsMusicGenerator.Tests
             using (var editor = new PlanEditorForm(null, "", 10, "music_v2_5", AppPaths.AppFolder, ""))
             {
                 editor.CreateControl();
+                Assert(!editor.ShowInTaskbar, "The modal plan editor must not appear as a separate taskbar or Alt+Tab window.");
                 var controls = Descendants(editor).ToList();
                 Assert(controls.OfType<ListBox>().Any(control => control.AccessibleName == "Composition sections"), "The section list has no accessible name.");
                 Assert(controls.OfType<Button>().Any(control => control.Text == "&Open plan or details..."), "The plan editor does not explain that track details can be opened.");
