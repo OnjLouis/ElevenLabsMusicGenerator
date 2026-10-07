@@ -47,7 +47,7 @@ namespace ElevenLabsMusicGenerator
                     MessageBox.Show("An unexpected error occurred." + Environment.NewLine + Environment.NewLine + eventArgs.Exception.Message + Environment.NewLine + Environment.NewLine + "Details were written to the log.", AppName, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 };
 
-                var initialFile = args.FirstOrDefault(value => !value.StartsWith("--", StringComparison.Ordinal));
+                var initialFile = InitialDocument(args);
                 try
                 {
                     Application.Run(new MainForm(initialFile));
@@ -58,6 +58,20 @@ namespace ElevenLabsMusicGenerator
                     MessageBox.Show("The application could not continue." + Environment.NewLine + Environment.NewLine + ex.Message, AppName, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
+        }
+
+        private static string InitialDocument(string[] args)
+        {
+            for (int i = 0; i < args.Length; i++)
+            {
+                if (args[i].Equals("--cleanup-update", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal)) i++;
+                    continue;
+                }
+                if (!args[i].StartsWith("--", StringComparison.Ordinal)) return args[i];
+            }
+            return null;
         }
     }
 }

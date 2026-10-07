@@ -103,6 +103,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 if (args.Length == 2 && args[0] == "--live-plan-smoke") return RunLivePlanSmoke(args[1]);
                 if (args.Length == 3 && args[0] == "--live-plan-compose-smoke") return RunLivePlanComposeSmoke(args[1], args[2]);
                 if (args.Length == 2 && args[0] == "--private-updater-smoke") return RunPrivateUpdaterSmoke(args[1]);
+                Run("Startup separates updater options from documents", TestStartupArguments);
                 Run("Settings round trip", TestSettingsRoundTrip);
                 Run("Sequential playback stop and stale completion", TestPlaybackQueue);
                 Run("Native audio sequence and file release", TestNativePlayback);
@@ -241,6 +242,16 @@ namespace ElevenLabsMusicGenerator.Tests
                 owner.Close(); main.Dispose();
             }
         }
+        private static void TestStartupArguments()
+        {
+            var parser = typeof(Program).GetMethod("InitialDocument", BindingFlags.Static | BindingFlags.NonPublic);
+            Func<string[], string> parse = args => (string)parser.Invoke(null, new object[] { args });
+            Assert(parse(new[] { "--cleanup-update", "update staging" }) == null, "Updater cleanup folder was interpreted as a prompt.");
+            Assert(parse(new[] { "--cleanup-update", "update staging", "prompt.txt" }) == "prompt.txt", "Cleanup consumed a real prompt argument.");
+            Assert(parse(new[] { "--CLEANUP-UPDATE", "update staging" }) == null, "Cleanup option must be case insensitive.");
+            Assert(parse(new string[0]) == null && parse(new[] { "prompt.txt" }) == "prompt.txt", "Normal document startup changed.");
+        }
+
         private static void TestConfirmationWording()
         {
             var method = typeof(MusicGenerationRequest).GetMethod("ConfirmationIntro");
