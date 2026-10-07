@@ -22,8 +22,12 @@ Test API key checks the selected feature and separately reports whether the key 
 Results open in a focused read-only dialog with a Close button so they can be read by line or copied.
 
 - Windows: download the Windows ZIP, extract it to a folder, and run `ElevenLabsMusicGenerator.exe`. By default, music is saved in a `Music` folder beside the app. Preferences and drafts stay with the portable app; the API key is protected for the current Windows account and computer.
-- Mac: download the Apple Silicon ZIP for an M-series Mac or the Intel ZIP for an Intel Mac, extract the app, and drag it to Applications. The first save uses `~/Music/ElevenLabs Music Generator`. The API key is stored in your Mac Keychain. Check for Updates checks published versions for a matching Mac package and offers the releases page; installation is manual.
+- Mac: download the Apple Silicon ZIP for an M-series Mac or the Intel ZIP for an Intel Mac, extract the app, and drag it to Applications. The first save uses `~/Music/ElevenLabs Music Generator`. The API key is stored in your Mac Keychain. Check for Updates downloads and verifies the matching signed Mac package, replaces the application and reopens it. Automatic startup checks can be changed in Settings.
 
 Do not share personal settings, prompts, music, drafts, or API-key files when sharing the application. The app sends your prompt or composition plan to ElevenLabs when you confirm generation.
 
 The [Windows manual](Manual.html) and [Mac manual](Mac/Manual.html) describe the controls, keyboard commands, file locations, recovery, and update behavior for each platform.
+
+Press F1 for help with the focused control. Audio Settings brings output-device selection, default format and optional sequential playback together in Preferences or Settings.
+
+For speech, dialogue, transcription, voice conversion and automatic dubbing, see the [companion ElevenLabs Speech Generator](https://github.com/OnjLouis/ElevenLabsSpeechGenerator).

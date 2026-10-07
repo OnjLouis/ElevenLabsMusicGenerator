@@ -26,6 +26,7 @@ namespace ElevenLabsMusicGenerator
             var target = Required(options, "--update-target");
             var updaterRoot = Application.StartupPath;
             var rollback = Path.Combine(updaterRoot, "rollback");
+            bool rollbackNeeded = false;
             try
             {
                 var waitPid = int.Parse(Required(options, "--update-wait-pid"));
@@ -51,15 +52,8 @@ namespace ElevenLabsMusicGenerator
                 }
                 SaveUpdateBackup(targetRoot, rollback);
 
-                try
-                {
-                    foreach (var name in ProgramFiles) File.Copy(Path.Combine(stage, name), Path.Combine(targetRoot, name), true);
-                }
-                catch
-                {
-                    RestoreRollback(targetRoot, rollback);
-                    throw;
-                }
+                rollbackNeeded = true;
+                foreach (var name in ProgramFiles) File.Copy(Path.Combine(stage, name), Path.Combine(targetRoot, name), true);
 
                 var targetExe = Path.Combine(targetRoot, ProgramFiles[0]);
 #if PRIVATE_TEST
@@ -75,7 +69,11 @@ namespace ElevenLabsMusicGenerator
             }
             catch (Exception ex)
             {
-                try { if (Directory.Exists(rollback)) RestoreRollback(target, rollback); } catch { }
+                if (rollbackNeeded)
+                {
+                    try { RestoreRollback(target, rollback); }
+                    catch (Exception restoreError) { AppLog.WriteException("Update rollback failed", restoreError); }
+                }
                 WriteUpdateError(target, ex);
 #if PRIVATE_TEST
                 if (SuppressRestartForTest) throw;
@@ -201,6 +199,7 @@ namespace ElevenLabsMusicGenerator
             {
                 var source = Path.Combine(rollback, name);
                 if (File.Exists(source)) File.Copy(source, Path.Combine(fullTarget, name), true);
+                else if (File.Exists(Path.Combine(fullTarget, name))) File.Delete(Path.Combine(fullTarget, name));
             }
         }
 

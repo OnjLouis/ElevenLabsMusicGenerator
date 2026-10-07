@@ -77,6 +77,24 @@ namespace ElevenLabsMusicGenerator.Tests
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             PlaybackDependency.Initialize();
+            int result = 1;
+            using (var context = new ApplicationContext())
+            {
+                EventHandler run = null;
+                run = delegate
+                {
+                    Application.Idle -= run;
+                    try { result = RunChecks(args); }
+                    finally { context.ExitThread(); }
+                };
+                Application.Idle += run;
+                Application.Run(context);
+            }
+            return result;
+        }
+
+        private static int RunChecks(string[] args)
+        {
             try
             {
                 if (args.Length == 2 && args[0] == "--live-auth-env") return RunLiveAuthentication(args[1]);
@@ -143,6 +161,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 Run("Invalid update signature rejection", TestInvalidUpdateSignature);
                 Run("Valid update signature acceptance", TestValidUpdateSignature);
                 Run("Unsafe update path rejection", TestUnsafeUpdatePathRejection);
+                Run("Rollback restores absent program files", TestRollbackAbsentFiles);
                 Console.WriteLine("PASS: " + passed + " tests.");
                 CleanupPortableTestData();
                 return 0;
@@ -207,9 +226,16 @@ namespace ElevenLabsMusicGenerator.Tests
                     dialog.Close();
                 };
                 guard.Tick += delegate { guard.Stop(); foreach (var f in System.Windows.Forms.Application.OpenForms.Cast<System.Windows.Forms.Form>().Where(x => x.Text.StartsWith("Help: ")).ToArray()) f.Close(); failure = new Exception("Context-help capture timed out."); };
+                // Physical modifiers belong to the desktop user, not the synthetic F1 message.
+                var modifiersWait = System.Diagnostics.Stopwatch.StartNew();
+                while (Control.ModifierKeys != Keys.None && modifiersWait.ElapsedMilliseconds < 3000)
+                {
+                    Application.DoEvents(); Thread.Sleep(10);
+                }
+                Assert(Control.ModifierKeys == Keys.None, "Release desktop modifier keys before testing unmodified F1.");
                 timer.Start(); guard.Start();
                 var message = System.Windows.Forms.Message.Create(key.Handle, 0x0100, (IntPtr)(int)System.Windows.Forms.Keys.F1, IntPtr.Zero);
-                Assert(System.Windows.Forms.Application.FilterMessage(ref message), "F1 must work inside an owned Preferences dialog.");
+                Assert(System.Windows.Forms.Application.FilterMessage(ref message), "F1 must work inside an owned Preferences dialog. Message loop: " + Application.MessageLoop + "; modifiers: " + Control.ModifierKeys);
                 if (failure != null) throw failure;
                 Assert(key.Focused, "Closing help must restore its original focused control.");
                 owner.Close(); main.Dispose();
@@ -520,6 +546,22 @@ namespace ElevenLabsMusicGenerator.Tests
             Console.WriteLine("Lyrics: " + (result.LyricsPath ?? "not returned"));
             Console.WriteLine("Elapsed seconds: " + result.Elapsed.TotalSeconds.ToString("0.0"));
             return 0;
+        }
+
+        private static void TestRollbackAbsentFiles()
+        {
+            var root = Path.Combine(AppPaths.AppFolder, "Rollback absence fixture");
+            var target = Path.Combine(root, "Target"); var backup = Path.Combine(root, "Backup");
+            Directory.CreateDirectory(target); Directory.CreateDirectory(backup);
+            try
+            {
+                File.WriteAllText(Path.Combine(backup, "Manual.html"), "original");
+                foreach (var name in new[] { "ElevenLabsMusicGenerator.exe", "Manual.html", "LICENSE.txt" }) File.WriteAllText(Path.Combine(target, name), "replacement");
+                typeof(ProgramUpdater).GetMethod("RestoreRollback", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic).Invoke(null, new object[] { target, backup });
+                Assert(File.ReadAllText(Path.Combine(target, "Manual.html")) == "original", "Rollback did not restore the original file.");
+                Assert(Directory.GetFiles(target).Length == 1, "Rollback left files that did not exist before the update.");
+            }
+            finally { Directory.Delete(root, true); }
         }
 
         private static int RunPrivateUpdaterSmoke(string packageFolder)
