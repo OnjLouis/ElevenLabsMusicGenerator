@@ -6,9 +6,9 @@ namespace ElevenLabsMusicGenerator
 {
     internal sealed class ApiKeyTestResultForm : Form
     {
-        public ApiKeyTestResultForm(string result)
+        public ApiKeyTestResultForm(string result, string title = "API key test result", Action openManual = null)
         {
-            Text = "API key test result";
+            Text = title;
             AccessibleName = Text;
             StartPosition = FormStartPosition.CenterParent;
             Size = new Size(640, 280);
@@ -28,13 +28,18 @@ namespace ElevenLabsMusicGenerator
                 ReadOnly = true,
                 ScrollBars = ScrollBars.Vertical,
                 TabStop = true,
-                AccessibleName = "API key test result",
-                AccessibleDescription = "Read by line with the arrow keys, or select and copy the text.",
+                AccessibleName = title,
                 Text = result
             };
-            var closeButton = new Button { Text = "&Close", AutoSize = true, DialogResult = DialogResult.OK };
+            var closeButton = new Button { Text = "&Close", AutoSize = true, DialogResult = DialogResult.OK, TabIndex = 1 };
             var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.RightToLeft };
             buttons.Controls.Add(closeButton);
+            if (openManual != null)
+            {
+                var manualButton = new Button { Text = "Open &manual", AutoSize = true, TabIndex = 0 };
+                manualButton.Click += delegate { openManual(); };
+                buttons.Controls.Add(manualButton);
+            }
             layout.Controls.Add(resultTextBox, 0, 0);
             layout.Controls.Add(buttons, 0, 1);
             Controls.Add(layout);

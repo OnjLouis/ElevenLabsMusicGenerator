@@ -14,6 +14,8 @@ namespace ElevenLabsMusicGenerator
     internal sealed class MainForm : Form
     {
         private readonly AppSettings settings;
+        private readonly Playback playback = new Playback();
+        private readonly ListBox outputs = new ListBox { AccessibleName = "Generated audio", IntegralHeight = false, Dock = DockStyle.Fill };
         private readonly ComboBox modelComboBox;
         private bool updatingModelSelection;
         private static readonly string[] ModelIds = { MusicGenerationRequest.SoundEffectsModel, "music_v2_5", "music_v2", "music_v1" };
@@ -54,6 +56,9 @@ namespace ElevenLabsMusicGenerator
         public MainForm(string initialFile)
         {
             settings = AppSettings.Load();
+            playback.Failed += ex => { if (!IsDisposed) using (var result = new ApiKeyTestResultForm(ex.Message, "Could not play")) result.ShowDialog(this); };
+            playback.Started += path => AppLog.Write("Playing " + Path.GetFileName(path) + ".");
+            Disposed += delegate { playback.Dispose(); };
             Text = "ElevenLabs Music and Sound FX Generator";
             StartPosition = FormStartPosition.CenterScreen;
             MinimumSize = new Size(760, 600);
@@ -70,7 +75,7 @@ namespace ElevenLabsMusicGenerator
             MainMenuStrip = BuildMenu();
             Controls.Add(MainMenuStrip);
 
-            var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 6, Padding = new Padding(12) };
+            var root = new TableLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, AutoScrollMinSize = new Size(0, 700), ColumnCount = 1, RowCount = 7, Padding = new Padding(12) };
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -153,10 +158,13 @@ namespace ElevenLabsMusicGenerator
             openOutputButton.Click += delegate { OpenOutputFolder(); };
             var preferencesButton = NewButton("P&references...", "Open preferences", "Ctrl+,");
             preferencesButton.Click += delegate { ShowPreferences(0); };
-            var helpButton = NewButton("Help", "Open the HTML manual", "F1");
+            var helpButton = NewButton("Help", "Open the HTML manual", "");
             helpButton.Click += delegate { OpenManual(); };
             buttons.Controls.Add(generateButton);
             buttons.Controls.Add(cancelButton);
+            var playButton = NewButton("Pla&y", "Play the selected generated audio", "Alt+Y"); playButton.Click += delegate { PlaySelected(); };
+            var stopButton = NewButton("Stop", "Stop the current audio and remaining queue", "Esc"); stopButton.Click += delegate { playback.Stop(); };
+            buttons.Controls.Add(playButton); buttons.Controls.Add(stopButton);
             buttons.Controls.Add(openOutputButton);
             buttons.Controls.Add(preferencesButton);
             buttons.Controls.Add(helpButton);
@@ -176,6 +184,9 @@ namespace ElevenLabsMusicGenerator
             statusPanel.Controls.Add(progressBar, 0, 3);
             statusPanel.Controls.Add(statusTextBox, 0, 4);
             root.Controls.Add(statusPanel, 0, 5);
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
+            root.Controls.Add(outputs, 0, 6);
+            outputs.KeyDown += (sender, args) => { if (args.KeyCode == Keys.Enter && args.Modifiers == Keys.None) { PlaySelected(); args.Handled = args.SuppressKeyPress = true; } };
 
             Controls.Add(root);
             var statusStrip = new StatusStrip { AccessibleName = "Status bar" };
@@ -204,6 +215,7 @@ namespace ElevenLabsMusicGenerator
                 promptTextBox.Focus();
                 UpdateService.CheckAutomatically(this, settings);
             };
+            ContextHelp.Attach(this, OpenManual, HelpDescription);
         }
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
@@ -214,9 +226,9 @@ namespace ElevenLabsMusicGenerator
             if (keyData == (Keys.Alt | Keys.B)) { balanceTextBox.Focus(); return true; }
             if (keyData == (Keys.Control | Keys.Enter)) { StartGeneration(); return true; }
             if (keyData == Keys.F5) { CheckBalance(); return true; }
-            if (keyData == Keys.Escape && generationRunning) { CancelGeneration(); return true; }
+            if (keyData == Keys.Escape) { playback.Stop(); if (generationRunning) CancelGeneration(); return true; }
             if (keyData == (Keys.Control | Keys.Oemcomma)) { ShowPreferences(0); return true; }
-            if (keyData == Keys.F1) { OpenManual(); return true; }
+            if (keyData == Keys.F1) { ContextHelp.Show(this, OpenManual, HelpDescription); return true; }
             if (keyData == (Keys.Control | Keys.F1)) { OpenProjectPage(); return true; }
             return base.ProcessCmdKey(ref msg, keyData);
         }
@@ -242,12 +254,16 @@ namespace ElevenLabsMusicGenerator
             var options = new ToolStripMenuItem("&Options");
             options.DropDownItems.Add(MenuCommand("&Preferences...", delegate { ShowPreferences(0); }, Keys.Control | Keys.Oemcomma, "Ctrl+,"));
             options.DropDownItems.Add(MenuCommand("Refresh &Balance", delegate { CheckBalance(); }, Keys.F5, "F5"));
+            options.DropDownItems.Add(MenuCommand("&Audio settings...", delegate { ShowPreferences(3); }, Keys.Control | Keys.Shift | Keys.U, "Ctrl+Shift+U"));
+            options.DropDownItems.Add(MenuCommand("Pla&y Selected", delegate { PlaySelected(); }, Keys.Alt | Keys.Y, "Alt+Y"));
+            options.DropDownItems.Add(MenuCommand("&Stop Playback", delegate { playback.Stop(); }, Keys.None, "Esc"));
 
             var help = new ToolStripMenuItem("&Help");
             help.DropDownItems.Add(MenuCommand("&Check for Updates...", delegate { UpdateService.CheckForUpdates(this, settings, false); }, Keys.Shift | Keys.F1, "Shift+F1"));
-            help.DropDownItems.Add(MenuCommand("ElevenLabs Music and Sound FX Generator &Help", delegate { OpenManual(); }, Keys.F1, "F1"));
+            help.DropDownItems.Add(MenuCommand("Help for Focused &Control", delegate { ContextHelp.Show(this, OpenManual, HelpDescription); }, Keys.F1, "F1"));
+            help.DropDownItems.Add(new ToolStripMenuItem("ElevenLabs Music and Sound FX Generator &Help", null, delegate { OpenManual(); }));
             help.DropDownItems.Add(MenuCommand("&Project Page", delegate { OpenProjectPage(); }, Keys.Control | Keys.F1, "Ctrl+F1"));
-            help.DropDownItems.Add(new ToolStripMenuItem("&Usage Analytics", null, delegate { OpenUsageAnalytics(); }));
+            help.DropDownItems.Add(MenuCommand("&Usage Analytics", delegate { OpenUsageAnalytics(); }, Keys.Alt | Keys.F1, "Alt+F1"));
             help.DropDownItems.Add(new ToolStripMenuItem("&Donate", null, delegate { OpenDonatePage(); }));
             help.DropDownItems.Add(new ToolStripMenuItem("&About", null, delegate { ShowAbout(); }));
             menu.Items.Add(file);
@@ -317,6 +333,7 @@ namespace ElevenLabsMusicGenerator
             }
             SaveDraftNonFatal();
             generationRunning = true;
+            playback.Stop();
             generationCancellation = new CancellationTokenSource();
             SetGenerationControls(true);
             var completed = new List<GenerationResult>();
@@ -334,7 +351,8 @@ namespace ElevenLabsMusicGenerator
                     }
                 });
                 SetStatus("Generation complete. Saved " + completed.Count + " new track" + (completed.Count == 1 ? "" : "s") + "; kept " + plan.ExistingCount + " existing." + RunStatistics(completed, elapsed.Elapsed));
-                MessageBox.Show(this, "Generation completed successfully. Existing tracks were kept unchanged." + Environment.NewLine + Environment.NewLine + string.Join(Environment.NewLine, completed.Select(item => Path.GetFileName(item.OutputPath)).ToArray()), Program.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                if (settings.AutoPlayGenerations) playback.PlaySequence(completed.Select(item => item.OutputPath), settings.PlaybackDevice);
+                else MessageBox.Show(this, "Generation completed successfully. Existing tracks were kept unchanged." + Environment.NewLine + Environment.NewLine + string.Join(Environment.NewLine, completed.Select(item => Path.GetFileName(item.OutputPath)).ToArray()), Program.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (OperationCanceledException)
             {
@@ -352,6 +370,8 @@ namespace ElevenLabsMusicGenerator
                 generationRunning = false;
                 if (generationCancellation != null) generationCancellation.Dispose();
                 generationCancellation = null;
+                foreach (var item in completed) { outputs.Items.Add(new AudioResult(item.OutputPath)); if (outputs.Items.Count > 200) outputs.Items.RemoveAt(0); }
+                if (outputs.Items.Count > 0) outputs.SelectedIndex = outputs.Items.Count - 1;
                 SetGenerationControls(false);
                 SetPlanMode();
                 generateButton.Focus();
@@ -381,7 +401,7 @@ namespace ElevenLabsMusicGenerator
             if (isSoundEffect && settings.OutputFormat.StartsWith("mp3_48000", StringComparison.Ordinal))
             {
                 MessageBox.Show(this, "Sound Effects supports the 44.1 kHz WAV and MP3 options. Choose one in Preferences.", Program.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
-                ShowPreferences(0);
+                ShowPreferences(3);
                 return null;
             }
             if (prompt.Length == 0 && !usePlan)
@@ -677,6 +697,7 @@ namespace ElevenLabsMusicGenerator
             using (var dialog = new PreferencesForm(settings, tab))
             {
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;
+                playback.Stop();
                 SetGenerationMode();
                 variationsNumeric.Value = settings.DefaultVariations;
                 instrumentalCheckBox.Checked = settings.DefaultInstrumental;
@@ -799,6 +820,7 @@ namespace ElevenLabsMusicGenerator
             promptTextBox.AccessibleDescription = "Describe the " + (settings.ModelId == MusicGenerationRequest.SoundEffectsModel ? "sound effect" : "music") +
                 " to generate. " + characterCountLabel.Text + ".";
         }
+        private string HelpDescription(Control control) { return control == promptTextBox ? ContextHelp.Description(control) + "\r\n\r\n" + characterCountLabel.Text + "." : ContextHelp.Description(control); }
 
         private void SaveGenerationSettings()
         {
@@ -898,6 +920,13 @@ namespace ElevenLabsMusicGenerator
             MessageBox.Show(this, Program.AppName + " " + Program.Version + Environment.NewLine + Environment.NewLine + "Portable accessible Windows utility for ElevenLabs music and sound effects generation." + Environment.NewLine + Environment.NewLine + "Created by Andre Louis.", "About " + Program.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
+        private sealed class AudioResult
+        {
+            public readonly string Path;
+            public AudioResult(string path) { Path = path; }
+            public override string ToString() { return System.IO.Path.GetFileName(Path); }
+        }
+        private void PlaySelected() { var item = outputs.SelectedItem as AudioResult; if (item != null) playback.Play(item.Path, settings.PlaybackDevice); }
         private void MainFormClosing(object sender, FormClosingEventArgs e)
         {
             if (generationRunning)
@@ -907,6 +936,7 @@ namespace ElevenLabsMusicGenerator
                 return;
             }
             draftTimer.Stop();
+            playback.Dispose();
             SaveDraftNonFatal();
             SavePlanDraftNonFatal();
             SaveGenerationSettings();

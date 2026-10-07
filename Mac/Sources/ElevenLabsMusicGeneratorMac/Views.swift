@@ -136,11 +136,22 @@ struct MainView: View {
                     .disabled(!model.isBusy)
                     .help("Cancel the current generation")
                     .accessibilityHint("Stops the current request. Completed tracks remain saved.")
+                Button("Play", action: model.playSelected).disabled(model.selectedOutput == nil)
+                    .accessibilityHint("Play the selected generated audio.")
+                Button("Stop", action: model.stopPlayback)
+                    .accessibilityHint("Stop the current audio and the remaining playback queue.")
                 Spacer()
                 if model.isBusy { ProgressView().controlSize(.small) }
             }
+            List(model.completed, id: \.self, selection: $model.selectedOutput) { url in
+                Text(url.lastPathComponent).tag(url)
+            }.frame(minHeight: 60, maxHeight: 90).accessibilityLabel("Generated audio")
+                .accessibilityHint("Choose a saved result. Return plays it; Escape stops playback.")
+                .onKeyPress(.return) { model.playSelected(); return .handled }
+                .onKeyPress(.escape) { model.stopPlayback(); return .handled }
         }
         .padding(20)
+        .onExitCommand { model.stopPlayback(); if model.isBusy { model.cancelGeneration() } }
         .sheet(isPresented: $model.showPlanEditor) { PlanEditorView(model: model) }
         .alert(model.isSoundEffect ? "Generate Sound Effects?" : "Generate Music?", isPresented: $model.showConfirmation) {
             Button("Generate") { model.beginGeneration() }
@@ -183,7 +194,8 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TabView {
+            PreferenceTabs(panes: [
+                .init("General") {
                 Form {
                 HStack {
                     Text("Music folder")
@@ -210,7 +222,9 @@ struct SettingsView: View {
                 Text("The folder is created when music or a prompt is first saved.")
                     .foregroundStyle(.secondary)
             }
-                .padding(18).tabItem { Text("General").accessibilityHint("Music folder and saved details.") }
+                .padding(18)
+                },
+                .init("API Key") {
                 Form {
                 SecureField("New API key", text: $enteredKey)
                     .accessibilityLabel("New ElevenLabs API key")
@@ -231,8 +245,10 @@ struct SettingsView: View {
                 Link("Get an ElevenLabs API key", destination: URL(string: "https://elevenlabs.io/app/settings/api-keys")!)
                     .accessibilityHint("Opens ElevenLabs' API key page in your default browser.")
             }
-                .padding(18).tabItem { Text("API Key").accessibilityHint("Save, test, or remove the API key.") }
-            }
+                .padding(18)
+                }
+                , .init("Audio") { AudioSettingsView(model: model) }
+            ], selection: $model.settingsTab)
             HStack {
                 Spacer()
                 Button("Close") { NSApp.keyWindow?.performClose(nil) }
@@ -241,7 +257,7 @@ struct SettingsView: View {
             }
             .padding([.horizontal, .bottom], 18)
         }
-        .frame(width: 580, height: 290)
+        .frame(width: 580, height: 360)
         .onAppear { hasKey = (try? KeychainStore.read()) != nil }
         .onExitCommand { NSApp.keyWindow?.performClose(nil) }
     }
@@ -326,7 +342,6 @@ enum ApiKeyTestResultDialog {
         textView.font = .systemFont(ofSize: NSFont.systemFontSize)
         textView.string = result
         textView.setAccessibilityLabel("API key test result")
-        textView.setAccessibilityHelp("Read by line with the arrow keys, or select and copy the text.")
         scroll.documentView = textView
         alert.accessoryView = scroll
         alert.window.initialFirstResponder = textView

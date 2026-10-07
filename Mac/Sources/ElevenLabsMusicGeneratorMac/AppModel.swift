@@ -40,6 +40,9 @@ final class AppModel: ObservableObject {
     @Published var balanceFocusRequest = 0
     @Published var statusFocusRequest = 0
     @Published var completed: [URL] = []
+    @Published var selectedOutput: URL?
+    @Published var settingsTab = "General"
+    private let playback = AudioPlayback()
     @Published var focusRequest: MainFocusRequest?
 
     private var promptDocument: URL?
@@ -318,9 +321,17 @@ final class AppModel: ObservableObject {
         return request.confirmationIntro(pendingCount: pendingIndices.count) + "\nModel: \(request.model.title)\nFormat: \(request.format.title)" + kept + "\nElevenLabs credits may be charged for each new request."
     }
 
+    func playSelected() { if let selectedOutput { play([selectedOutput]) } }
+    func stopPlayback() { playback.stop() }
+    private func play(_ urls: [URL]) {
+        playback.onError = { [weak self] message in self?.show(MusicError.response(message)) }
+        playback.playSequence(urls, device: preferences.playbackDevice ?? "")
+    }
+    func shutdown() { stopPlayback(); ContextHelp.shared.stop(); flushDrafts() }
     func beginGeneration() {
         guard let request = pendingRequest, !pendingIndices.isEmpty else { return }
         isBusy = true
+        stopPlayback()
         completed = []
         let indices = pendingIndices
         generationTask = Task {
@@ -332,13 +343,15 @@ final class AppModel: ObservableObject {
                     addStatus("Generating variation \(index) of \(request.variations).")
                     let result = try await service.generate(request, index: index, key: key)
                     completed.append(result.url)
+                    selectedOutput = result.url
                     addStatus("Saved \(result.url.lastPathComponent). Generation time: \(String(format: "%.1f", result.seconds)) seconds.")
                 }
                 let summary = "Generation complete. \(completed.count) new track(s) saved to \(request.outputFolder.path)."
                 addStatus(summary)
-                NSSound.beep()
+                if preferences.autoPlayGenerations != true { NSSound.beep() }
                 NSApp.requestUserAttention(.informationalRequest)
-                notice = AppNotice(title: "Generation Complete", message: summary)
+                if preferences.autoPlayGenerations == true { play(completed) }
+                else { notice = AppNotice(title: "Generation Complete", message: summary) }
             } catch is CancellationError {
                 addStatus("Generation cancelled. Completed tracks were kept.")
             } catch {

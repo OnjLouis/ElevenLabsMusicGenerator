@@ -14,6 +14,8 @@ namespace ElevenLabsMusicGenerator
         public bool DefaultInstrumental { get; set; }
         public bool UseCompositionPlan { get; set; }
         public bool SaveGeneratedDetails { get; set; }
+        public bool AutoPlayGenerations { get; set; }
+        public int PlaybackDevice { get; set; }
         public string OutputFormat { get; set; }
         public string ModelId { get; set; }
         public decimal SoundEffectSeconds { get; set; }
@@ -33,6 +35,7 @@ namespace ElevenLabsMusicGenerator
             DefaultVariations = 2;
             DefaultInstrumental = false;
             SaveGeneratedDetails = true;
+            PlaybackDevice = -1;
             OutputFormat = "pcm_44100";
             ModelId = "music_v2_5";
             SoundEffectSeconds = 5;
@@ -50,12 +53,14 @@ namespace ElevenLabsMusicGenerator
             var settings = new AppSettings();
             var ini = IniFile.Load(AppPaths.SettingsPath);
             var storedOutputFolder = ini.Get("General", "DefaultOutputFolder", settings.DefaultOutputFolder);
-            settings.DefaultOutputFolder = storedOutputFolder == @".\Music" ? AppPaths.DefaultMusicFolder : Environment.ExpandEnvironmentVariables(storedOutputFolder);
+            settings.DefaultOutputFolder = ResolveOutputFolder(storedOutputFolder, false);
             settings.DefaultLengthSeconds = ReadInt(ini, "General", "DefaultLengthSeconds", settings.DefaultLengthSeconds, 3, 600);
             settings.DefaultVariations = ReadInt(ini, "General", "DefaultVariations", settings.DefaultVariations, 1, 10);
             settings.DefaultInstrumental = ReadBool(ini, "General", "DefaultInstrumental", settings.DefaultInstrumental);
             settings.UseCompositionPlan = ReadBool(ini, "General", "UseCompositionPlan", false);
             settings.SaveGeneratedDetails = ReadBool(ini, "General", "SaveGeneratedDetails", true);
+            settings.AutoPlayGenerations = ReadBool(ini, "Audio", "AutoPlayGenerations", false);
+            settings.PlaybackDevice = ReadInt(ini, "Audio", "PlaybackDevice", -1, -1, int.MaxValue);
             settings.OutputFormat = NormalizeOutputFormat(ini.Get("General", "OutputFormat", settings.OutputFormat));
             settings.ModelId = NormalizeModel(ini.Get("General", "ModelId", settings.ModelId));
             decimal seconds, influence;
@@ -67,7 +72,7 @@ namespace ElevenLabsMusicGenerator
             settings.InstallUpdatesSilently = ReadBool(ini, "Updates", "InstallSilently", settings.InstallUpdatesSilently);
             DateTime lastCheck;
             if (DateTime.TryParse(ini.Get("Updates", "LastCheckUtc", string.Empty), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out lastCheck)) settings.LastUpdateCheckUtc = lastCheck.ToUniversalTime();
-            settings.LastPreferencesTab = ReadInt(ini, "Window", "LastPreferencesTab", 0, 0, 2);
+            settings.LastPreferencesTab = ReadInt(ini, "Window", "LastPreferencesTab", 0, 0, 3);
 
             int x, y, width, height;
             if (int.TryParse(ini.Get("Window", "X", ""), out x) && int.TryParse(ini.Get("Window", "Y", ""), out y) &&
@@ -77,6 +82,30 @@ namespace ElevenLabsMusicGenerator
                 settings.WindowBounds = new Rectangle(x, y, width, height);
             }
             return settings;
+        }
+
+        public static string NormalizeFolderInput(string value)
+        {
+            var folder = (value ?? string.Empty).Trim();
+            if (folder.Length >= 2 && folder[0] == '"' && folder[folder.Length - 1] == '"')
+                folder = folder.Substring(1, folder.Length - 2);
+            return Environment.ExpandEnvironmentVariables(folder);
+        }
+
+        public static string ResolveOutputFolder(string value, bool requireAbsolute)
+        {
+            var folder = NormalizeFolderInput(value);
+            if (string.IsNullOrWhiteSpace(folder)) throw new InvalidDataException("Choose a default output folder.");
+            try
+            {
+                var root = Path.GetPathRoot(folder);
+                if (requireAbsolute && (!Path.IsPathRooted(folder) || root == @"\" || root.EndsWith(":", StringComparison.Ordinal)))
+                    throw new InvalidDataException("Choose an absolute default output folder, such as C:\\Audio.");
+                return Path.GetFullPath(requireAbsolute ? folder : Path.Combine(AppPaths.AppFolder, folder));
+            }
+            catch (ArgumentException ex) { throw new InvalidDataException("The default output folder contains invalid path characters.", ex); }
+            catch (NotSupportedException ex) { throw new InvalidDataException("The default output folder is not a supported folder path.", ex); }
+            catch (PathTooLongException ex) { throw new InvalidDataException("The default output folder path is too long.", ex); }
         }
 
         public void Save()
@@ -91,6 +120,8 @@ namespace ElevenLabsMusicGenerator
             ini.Set("General", "DefaultInstrumental", DefaultInstrumental.ToString());
             ini.Set("General", "UseCompositionPlan", UseCompositionPlan.ToString());
             ini.Set("General", "SaveGeneratedDetails", SaveGeneratedDetails.ToString());
+            ini.Set("Audio", "AutoPlayGenerations", AutoPlayGenerations.ToString());
+            ini.Set("Audio", "PlaybackDevice", PlaybackDevice.ToString(CultureInfo.InvariantCulture));
             ini.Set("General", "OutputFormat", NormalizeOutputFormat(OutputFormat));
             ini.Set("General", "ModelId", NormalizeModel(ModelId));
             ini.Set("SoundEffects", "Seconds", SoundEffectSeconds.ToString(CultureInfo.InvariantCulture));

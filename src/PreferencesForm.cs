@@ -16,6 +16,8 @@ namespace ElevenLabsMusicGenerator
         private readonly NumericUpDown variationsNumeric;
         private readonly CheckBox instrumentalCheckBox;
         private readonly CheckBox detailsCheckBox;
+        private readonly CheckBox autoPlayCheckBox;
+        private readonly ComboBox playbackDeviceComboBox;
         private readonly ComboBox formatComboBox;
         private readonly TextBox apiKeyTextBox;
         private readonly CheckBox showKeyCheckBox;
@@ -67,8 +69,14 @@ namespace ElevenLabsMusicGenerator
             AddLabeledControl(general, "Default &variations:", variationsNumeric);
             AddFullWidthControl(general, instrumentalCheckBox);
             AddFullWidthControl(general, detailsCheckBox);
-            AddLabeledControl(general, "Output &format:", formatComboBox);
             generalPage.Controls.Add(general);
+            var audioPage = new TabPage("Audio"); tabs.TabPages.Add(audioPage);
+            var audio = NewPageLayout();
+            playbackDeviceComboBox = AudioDevicesForm.DeviceList(settings.PlaybackDevice);
+            autoPlayCheckBox = new CheckBox { Text = "Play new &generations automatically in sequence", AutoSize = true, AccessibleName = "Play new generations automatically in sequence", Checked = settings.AutoPlayGenerations };
+            AddLabeledControl(audio, "Playback &device:", playbackDeviceComboBox);
+            AddLabeledControl(audio, "Default &format:", formatComboBox);
+            AddFullWidthControl(audio, autoPlayCheckBox); audioPage.Controls.Add(audio);
 
             var api = NewPageLayout();
             apiKeyTextBox = NewTextBox("ElevenLabs API key");
@@ -136,6 +144,7 @@ namespace ElevenLabsMusicGenerator
             if (keyData == (Keys.Control | Keys.D1)) { tabs.SelectedIndex = 0; return true; }
             if (keyData == (Keys.Control | Keys.D2)) { tabs.SelectedIndex = 1; return true; }
             if (keyData == (Keys.Control | Keys.D3)) { tabs.SelectedIndex = 2; return true; }
+            if (keyData == (Keys.Control | Keys.D4)) { tabs.SelectedIndex = 3; return true; }
             return base.ProcessCmdKey(ref msg, keyData);
         }
 
@@ -168,42 +177,47 @@ namespace ElevenLabsMusicGenerator
 
         private void OkButtonClick(object sender, EventArgs e)
         {
-            var folder = Environment.ExpandEnvironmentVariables(outputFolderTextBox.Text.Trim().Trim('"'));
-            if (folder.Length == 0)
+            string folder;
+            try
             {
-                MessageBox.Show(this, "Choose a default output folder.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                tabs.SelectedIndex = 0;
-                outputFolderTextBox.Focus();
-                return;
+                folder = AppSettings.ResolveOutputFolder(outputFolderTextBox.Text, true);
+                Directory.CreateDirectory(folder);
+                outputFolderTextBox.Text = folder;
             }
-            try { Directory.CreateDirectory(folder); }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "The output folder could not be created." + Environment.NewLine + Environment.NewLine + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "Default output folder could not be used." + Environment.NewLine + Environment.NewLine + ex.Message, "Could not use output folder", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 tabs.SelectedIndex = 0;
                 outputFolderTextBox.Focus();
                 return;
             }
 
+            try { AppPaths.SaveApiKey(apiKeyTextBox.Text); }
+            catch (Exception ex)
+            {
+                tabs.SelectedIndex = 1;
+                SetApiStatus("API key could not be saved: " + ex.Message);
+                apiKeyTextBox.Focus();
+                return;
+            }
             settings.DefaultOutputFolder = folder;
             settings.DefaultLengthSeconds = Convert.ToInt32(lengthNumeric.Value);
             settings.DefaultVariations = Convert.ToInt32(variationsNumeric.Value);
             settings.DefaultInstrumental = instrumentalCheckBox.Checked;
             settings.SaveGeneratedDetails = detailsCheckBox.Checked;
+            settings.AutoPlayGenerations = autoPlayCheckBox.Checked;
+            settings.PlaybackDevice = playbackDeviceComboBox.SelectedIndex - 1;
             settings.OutputFormat = StoredFormat(Convert.ToString(formatComboBox.SelectedItem));
             settings.UpdateCheckFrequency = AppSettings.NormalizeUpdateFrequency(Convert.ToString(updateFrequencyComboBox.SelectedItem).Replace("At startup", "Startup"));
             settings.InstallUpdatesSilently = silentUpdatesCheckBox.Checked;
             settings.LastPreferencesTab = tabs.SelectedIndex;
             try
             {
-                AppPaths.SaveApiKey(apiKeyTextBox.Text);
                 settings.Save();
             }
             catch (Exception ex)
             {
-                tabs.SelectedIndex = 1;
-                SetApiStatus("Preferences could not be saved: " + ex.Message);
-                apiKeyTextBox.Focus();
+                MessageBox.Show(this, "Preferences could not be saved." + Environment.NewLine + Environment.NewLine + ex.Message, "Could not save preferences", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             DialogResult = DialogResult.OK;
@@ -270,7 +284,8 @@ namespace ElevenLabsMusicGenerator
             {
                 dialog.Description = "Choose the default folder for generated audio.";
                 dialog.ShowNewFolderButton = true;
-                if (Directory.Exists(outputFolderTextBox.Text)) dialog.SelectedPath = outputFolderTextBox.Text;
+                var folder = AppSettings.NormalizeFolderInput(outputFolderTextBox.Text);
+                if (Directory.Exists(folder)) dialog.SelectedPath = folder;
                 if (dialog.ShowDialog(this) == DialogResult.OK) outputFolderTextBox.Text = dialog.SelectedPath;
             }
         }

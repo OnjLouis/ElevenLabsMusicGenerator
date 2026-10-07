@@ -4,13 +4,15 @@ import SwiftUI
 @main
 struct ElevenLabsMusicGeneratorApp: App {
     @StateObject private var model = AppModel()
+    @Environment(\.openSettings) private var openSettings
 
     var body: some Scene {
         WindowGroup("ElevenLabs Music and Sound FX Generator") {
             MainView(model: model)
+                .onAppear { ContextHelp.shared.install(openManual: model.openManual) }
                 .frame(minWidth: 760, minHeight: 700)
                 .onDisappear { model.flushDrafts() }
-                .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in model.flushDrafts() }
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in model.shutdown() }
         }
         .commands {
             CommandGroup(replacing: .newItem) {
@@ -40,6 +42,9 @@ struct ElevenLabsMusicGeneratorApp: App {
                 Button("Donate") { model.openDonatePage() }
             }
             CommandMenu("Controls") {
+                Button("Play Selected", action: model.playSelected)
+                Button("Stop Playback", action: model.stopPlayback)
+                Button("Audio Settings...") { model.settingsTab = "Audio"; openSettings() }.keyboardShortcut("u", modifiers: [.command, .shift])
                 Button("Focus Balance") { model.focusBalance() }
                     .keyboardShortcut("b", modifiers: .command)
                 Button("Focus Status Log") { model.focusStatus() }
@@ -61,11 +66,13 @@ struct ElevenLabsMusicGeneratorApp: App {
                     .keyboardShortcut("f", modifiers: [.command, .shift])
             }
             CommandGroup(replacing: .help) {
-                Button("ElevenLabs Music and Sound FX Generator Help") { model.openManual() }
+                Button("Help for Focused Control") { ContextHelp.shared.show() }
                     .keyboardShortcut(KeyEquivalent("\u{F704}"), modifiers: [])
+                Button("ElevenLabs Music and Sound FX Generator Help") { model.openManual() }
                 Button("Project Page") { model.openProjectPage() }
                     .keyboardShortcut(KeyEquivalent("\u{F704}"), modifiers: .command)
                 Button("Usage Analytics") { model.openUsageAnalytics() }
+                    .keyboardShortcut(KeyEquivalent("\u{F704}"), modifiers: .option)
                 Button("Donate") { model.openDonatePage() }
             }
         }

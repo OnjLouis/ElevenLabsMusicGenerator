@@ -18,12 +18,65 @@ namespace ElevenLabsMusicGenerator.Tests
     internal static class TestHarness
     {
         private static int passed;
+        private static void TestNativePlayback()
+        {
+            var folder = Path.Combine(AppPaths.AppFolder, "Native playback test");
+            Directory.CreateDirectory(folder);
+            var paths = new[] { "one.wav", "two.wav", "three.wav" }.Select(name => Path.Combine(folder, name)).ToArray();
+            try
+            {
+                foreach (var path in paths) using (var wave = new NAudio.Wave.WaveFileWriter(path, new NAudio.Wave.WaveFormat(44100, 16, 1))) wave.Write(new byte[8820], 0, 8820);
+                var starts = new List<string>(); var errors = new List<Exception>();
+                using (var player = new Playback())
+                {
+                    player.Started += path => starts.Add(path); player.Failed += ex => errors.Add(ex);
+                    player.PlaySequence(paths, -1);
+                    var wait = System.Diagnostics.Stopwatch.StartNew();
+                    while (player.IsPlaying && wait.ElapsedMilliseconds < 6000) { System.Windows.Forms.Application.DoEvents(); System.Threading.Thread.Sleep(10); }
+                    Assert(errors.Count == 0 && !player.IsPlaying && starts.SequenceEqual(paths), "Native WAV completion did not play the complete sequence: " + string.Join("; ", errors.Select(x => x.Message)));
+                    foreach (var path in paths) using (File.Open(path, FileMode.Open, FileAccess.Read, FileShare.None)) { }
+                    player.PlaySequence(paths, -1); player.Stop();
+                    int stopped = starts.Count;
+                    for (int i = 0; i < 30; i++) { System.Windows.Forms.Application.DoEvents(); System.Threading.Thread.Sleep(10); }
+                    Assert(!player.IsPlaying && starts.Count == stopped, "Native stop allowed another queued file to start.");
+                }
+            }
+            finally { Directory.Delete(folder, true); }
+        }
+        private static void TestPlaybackQueue()
+        {
+            var played = new List<string>(); int errors = 0;
+            Playback.TestPlay = (path, device) => { Assert(device == 2, "Queue lost selected device"); played.Add(path); };
+            try
+            {
+                using (var player = new Playback())
+                {
+                    player.Failed += ex => errors++;
+                    player.PlaySequence(new[] { "first.wav", "second.mp3", "third.wav" }, 2);
+                    Assert(played.SequenceEqual(new[] { "first.wav" }), "Queue overlapped audio");
+                    int first = player.TestGeneration;
+                    player.CompleteForTest(first);
+                    Assert(played.SequenceEqual(new[] { "first.wav", "second.mp3" }), "Queue did not advance");
+                    player.Stop(); player.CompleteForTest(first);
+                    Assert(played.Count == 2, "Stop allowed queued audio to restart");
+                    player.Play("manual.wav", 2); player.CompleteForTest(first);
+                    Assert(played.Last() == "manual.wav", "Stale completion replaced manual play");
+                    player.CompleteForTest(player.TestGeneration);
+                    Assert(!player.IsPlaying, "Completed playback retained a queue");
+                    Playback.TestPlay = (path, device) => { throw new IOException("test audio failure"); };
+                    player.PlaySequence(new[] { "bad.wav", "never.wav" }, 2);
+                    Assert(errors == 1 && !player.IsPlaying, "Playback error did not end queue");
+                }
+            }
+            finally { Playback.TestPlay = null; Playback.TestStop = null; }
+        }
 
         [STAThread]
         private static int Main(string[] args)
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
+            PlaybackDependency.Initialize();
             try
             {
                 if (args.Length == 2 && args[0] == "--live-auth-env") return RunLiveAuthentication(args[1]);
@@ -33,6 +86,11 @@ namespace ElevenLabsMusicGenerator.Tests
                 if (args.Length == 3 && args[0] == "--live-plan-compose-smoke") return RunLivePlanComposeSmoke(args[1], args[2]);
                 if (args.Length == 2 && args[0] == "--private-updater-smoke") return RunPrivateUpdaterSmoke(args[1]);
                 Run("Settings round trip", TestSettingsRoundTrip);
+                Run("Sequential playback stop and stale completion", TestPlaybackQueue);
+                Run("Native audio sequence and file release", TestNativePlayback);
+                Run("Owned context help preserves focus and private values", TestContextHelp);
+                Run("Quoted output folder settings", TestQuotedOutputFolder);
+                Run("Quoted preferences save without a success popup", TestQuotedPreferencesSave);
                 Run("Sound effects model and request", TestSoundEffectsRequest);
                 Run("Sound effects generation and safe resume", TestSoundEffectsGeneration);
                 Run("Sound effects mode preserves music settings", TestSoundEffectsModeSwitch);
@@ -115,6 +173,48 @@ namespace ElevenLabsMusicGenerator.Tests
             return 0;
         }
 
+        private static void TestContextHelp()
+        {
+            using (var preferences = new PreferencesForm(new AppSettings(), 3))
+            {
+                var tabs = Descendants(preferences).OfType<TabControl>().Single();
+                Assert(tabs.SelectedTab.Text == "Audio", "Audio command must open the shared Audio preferences tab.");
+                Assert(Descendants(tabs.SelectedTab).OfType<ComboBox>().Any(x => x.AccessibleName == "Default output format"), "Audio tab must contain output format.");
+            }
+            using (var main = new MainForm(null))
+            using (var owner = new PreferencesForm(new AppSettings(), 0))
+            using (var timer = new System.Windows.Forms.Timer { Interval = 50 })
+            using (var guard = new System.Windows.Forms.Timer { Interval = 2000 })
+            {
+                main.Location = owner.Location = new System.Drawing.Point(-2000, -2000);
+                owner.Owner = main;
+                var key = new TextBox { AccessibleName = "API key" }; key.UseSystemPasswordChar = true; key.Text = "secret-test-value-must-not-appear"; owner.Controls.Add(key); owner.Show(); key.Focus();
+                Exception failure = null;
+                timer.Tick += delegate
+                {
+                    var dialog = System.Windows.Forms.Application.OpenForms.Cast<System.Windows.Forms.Form>().FirstOrDefault(x => x.Text == "Help: API key");
+                    if (dialog == null) return;
+                    timer.Stop(); guard.Stop();
+                    try
+                    {
+                        var text = Descendants(dialog).OfType<System.Windows.Forms.TextBox>().Single();
+                        Assert(text.ReadOnly && text.Multiline && text.TabStop && !dialog.ShowInTaskbar, "Context help must be readable and owned, not another taskbar item.");
+                        Assert(string.IsNullOrEmpty(text.AccessibleDescription), "Help must not repeat basic screen-reader navigation instructions.");
+                        Assert(text.Text.Contains("ElevenLabs key") && !text.Text.Contains(key.Text), "Context help must explain API keys without exposing their values.");
+                        Assert(dialog.Owner == owner, "Help must belong to the current dialog.");
+                    }
+                    catch (Exception ex) { failure = ex; }
+                    dialog.Close();
+                };
+                guard.Tick += delegate { guard.Stop(); foreach (var f in System.Windows.Forms.Application.OpenForms.Cast<System.Windows.Forms.Form>().Where(x => x.Text.StartsWith("Help: ")).ToArray()) f.Close(); failure = new Exception("Context-help capture timed out."); };
+                timer.Start(); guard.Start();
+                var message = System.Windows.Forms.Message.Create(key.Handle, 0x0100, (IntPtr)(int)System.Windows.Forms.Keys.F1, IntPtr.Zero);
+                Assert(System.Windows.Forms.Application.FilterMessage(ref message), "F1 must work inside an owned Preferences dialog.");
+                if (failure != null) throw failure;
+                Assert(key.Focused, "Closing help must restore its original focused control.");
+                owner.Close(); main.Dispose();
+            }
+        }
         private static void TestConfirmationWording()
         {
             var method = typeof(MusicGenerationRequest).GetMethod("ConfirmationIntro");
@@ -129,6 +229,59 @@ namespace ElevenLabsMusicGenerator.Tests
             request.LengthSeconds = 60;
             var music = (string)method.Invoke(request, new object[] { 3 });
             Assert(music.StartsWith("Generate 3 music tracks?") && music.Contains("Duration: 60 seconds each."), "Music confirmation must use the fixed duration.");
+        }
+
+        private static void TestQuotedPreferencesSave()
+        {
+            var expected = Path.Combine(AppPaths.AppFolder, "Quoted preferences");
+            using (var form = new PreferencesForm(new AppSettings(), 0))
+            using (var action = new System.Windows.Forms.Timer { Interval = 50 })
+            using (var guard = new System.Windows.Forms.Timer { Interval = 1500 })
+            {
+                Exception failure = null;
+                var started = false;
+                action.Tick += delegate
+                {
+                    if (started) return;
+                    started = true; action.Stop();
+                    Descendants(form).OfType<System.Windows.Forms.TextBox>().First(x => x.AccessibleName == "Default output folder").Text = "  \"" + expected + "\"  ";
+                    ((System.Windows.Forms.Button)form.AcceptButton).PerformClick();
+                };
+                guard.Tick += delegate
+                {
+                    guard.Stop(); failure = new Exception("Preference save did not close directly; an unexpected dialog or validation prevented saving.");
+                    foreach (var other in System.Windows.Forms.Application.OpenForms.Cast<System.Windows.Forms.Form>().Where(x => x != form).ToArray()) other.Close();
+                    form.Close();
+                };
+                action.Start(); guard.Start();
+                var result = form.ShowDialog();
+                guard.Stop();
+                if (failure != null) throw failure;
+                Assert(result == System.Windows.Forms.DialogResult.OK && AppSettings.Load().DefaultOutputFolder == expected, "Quoted preferences must save silently with the correct folder.");
+            }
+            Directory.Delete(expected);
+        }
+
+        private static void TestQuotedOutputFolder()
+        {
+            var expected = Path.Combine(AppPaths.AppFolder, "Quoted output");
+            var ini = new IniFile();
+            ini.Set("General", "DefaultOutputFolder", "  \"" + expected + "\"  ");
+            ini.Save(AppPaths.SettingsPath, new string[0]);
+            try { Assert(AppSettings.Load().DefaultOutputFolder == expected, "Explorer-quoted output folders must load without quotes or whitespace."); }
+            finally { File.Delete(AppPaths.SettingsPath); }
+            Assert(AppSettings.ResolveOutputFolder("  \".\\Audio\"  ", false) == Path.Combine(AppPaths.AppFolder, "Audio"), "Relative portable paths must remain app-relative.");
+            Assert(AppSettings.ResolveOutputFolder(expected + "\\", true) == Path.GetFullPath(expected + "\\"), "Valid trailing folder separators must be preserved.");
+            Assert(AppSettings.ResolveOutputFolder(@"\\server\share\Audio", true) == @"\\server\share\Audio", "UNC folders must remain supported without contacting the server.");
+            Environment.SetEnvironmentVariable("ELEVENLABS_TEST_FOLDER", expected);
+            try { Assert(AppSettings.ResolveOutputFolder("\"%ELEVENLABS_TEST_FOLDER%\"", true) == expected, "Quoted environment-variable paths must expand."); }
+            finally { Environment.SetEnvironmentVariable("ELEVENLABS_TEST_FOLDER", null); }
+            foreach (var invalid in new[] { "", "relative", @"C:relative", @"\relative", "\"" + expected, expected + "\"", expected + "\\bad\"name" })
+            {
+                bool rejected = false;
+                try { AppSettings.ResolveOutputFolder(invalid, true); } catch (InvalidDataException ex) { rejected = ex.Message.Contains("output folder"); }
+                Assert(rejected, "Invalid or ambiguous paths must identify the output folder: " + invalid);
+            }
         }
 
         private static void TestMainModelSelector()
@@ -448,7 +601,9 @@ namespace ElevenLabsMusicGenerator.Tests
                 ModelId = "music_v2",
                 UpdateCheckFrequency = "Weekly",
                 InstallUpdatesSilently = true,
-                LastPreferencesTab = 2
+                LastPreferencesTab = 3,
+                AutoPlayGenerations = true,
+                PlaybackDevice = 2
             };
             settings.Save();
             var loaded = AppSettings.Load();
@@ -461,6 +616,8 @@ namespace ElevenLabsMusicGenerator.Tests
             Assert(loaded.ModelId == "music_v2", "Model did not round trip.");
             Assert(loaded.UpdateCheckFrequency == "Weekly", "Update frequency did not round trip.");
             Assert(loaded.InstallUpdatesSilently, "Silent update setting did not round trip.");
+            Assert(loaded.AutoPlayGenerations && loaded.PlaybackDevice == 2 && loaded.LastPreferencesTab == 3, "Audio preferences did not round trip.");
+            Assert(!new AppSettings().AutoPlayGenerations && new AppSettings().PlaybackDevice == -1, "Fresh audio preferences must use system default and opt-in playback.");
         }
 
         private static void TestPortableMusicFolderDefault()
@@ -1196,7 +1353,7 @@ namespace ElevenLabsMusicGenerator.Tests
                     { "Open Output &Folder", "Ctrl+Shift+O" }, { "&Generate", "Ctrl+Enter" },
                     { "&Cancel Generation", "Esc" }, { "&Preferences...", "Ctrl+," },
                     { "Refresh &Balance", "F5" }, { "&Check for Updates...", "Shift+F1" },
-                    { "ElevenLabs Music and Sound FX Generator &Help", "F1" },
+                    { "Help for Focused &Control", "F1" }, { "&Usage Analytics", "Alt+F1" },
                     { "&Project Page", "Ctrl+F1" }
                 };
                 foreach (var item in form.MainMenuStrip.Items.OfType<ToolStripMenuItem>().SelectMany(menu => menu.DropDownItems.OfType<ToolStripMenuItem>()))
@@ -1212,7 +1369,7 @@ namespace ElevenLabsMusicGenerator.Tests
                     { "Generate", "Ctrl+Enter" }, { "&Cancel", "Esc" },
                     { "Edit &plan...", "Alt+P" },
                     { "Open Output Folder", "Ctrl+Shift+O" }, { "Check Balance", "Ctrl+B" }, { "P&references...", "Ctrl+," },
-                    { "Help", "F1" }
+                    { "Pla&y", "Alt+Y" }, { "Stop", "Esc" }
                 };
                 foreach (var button in Descendants(form).OfType<Button>())
                 {
@@ -1368,9 +1525,9 @@ namespace ElevenLabsMusicGenerator.Tests
             {
                 preferences.CreateControl();
                 var controls = Descendants(preferences).ToList();
-                var tabs = controls.OfType<TabControl>().FirstOrDefault(control => control.TabPages.Count == 3);
+                var tabs = controls.OfType<TabControl>().FirstOrDefault(control => control.TabPages.Count == 4);
                 Assert(tabs != null, "Preferences tabs are missing.");
-                Assert(tabs.TabPages.Cast<TabPage>().Select(page => page.Text).SequenceEqual(new[] { "General", "API key", "Updates" }), "Preference tabs expose mnemonic markers as literal text.");
+                Assert(tabs.TabPages.Cast<TabPage>().Select(page => page.Text).SequenceEqual(new[] { "General", "API key", "Updates", "Audio" }), "Preference tabs expose mnemonic markers as literal text.");
                 Assert(controls.OfType<TextBox>().Any(control => control.AccessibleName == "ElevenLabs API key" && control.UseSystemPasswordChar), "Masked API key control is missing.");
                 Assert(controls.OfType<LinkLabel>().Any(control => control.AccessibleName == "Get an ElevenLabs API key" && control.TabStop), "Focusable API key help link is missing.");
                 Assert(controls.OfType<ComboBox>().Any(control => control.AccessibleName == "Check for updates"), "Update preference is missing.");

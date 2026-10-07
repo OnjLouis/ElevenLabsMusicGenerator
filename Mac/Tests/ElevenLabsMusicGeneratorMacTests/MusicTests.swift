@@ -28,6 +28,7 @@ final class MusicTests: XCTestCase {
         XCTAssertTrue(textView.isSelectable)
         XCTAssertEqual(textView.string, "Music API key accepted.\nCredit balance access available.")
         XCTAssertEqual(textView.accessibilityLabel(), "API key test result")
+        XCTAssertTrue((textView.accessibilityHelp() ?? "").isEmpty)
         XCTAssertTrue(alert.accessoryView is NSScrollView)
         XCTAssertTrue(alert.window.initialFirstResponder === textView)
         XCTAssertEqual(alert.buttons.first?.title, "Close")

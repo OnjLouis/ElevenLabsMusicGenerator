@@ -23,7 +23,7 @@ $testExe = Join-Path $WorkRoot 'ElevenLabsMusicGenerator.Tests.exe'
 $sources = @()
 $sources += Get-ChildItem -LiteralPath (Join-Path $root 'src') -Filter '*.cs' | Sort-Object Name | ForEach-Object FullName
 $sources += Join-Path $root 'tests\TestHarness.cs'
-& $compiler /nologo /target:exe /optimize+ /define:PRIVATE_TEST /main:ElevenLabsMusicGenerator.Tests.TestHarness "/out:$testExe" /reference:System.dll /reference:System.Core.dll /reference:System.Security.dll /reference:System.Runtime.Serialization.dll /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.dll /reference:System.Web.Extensions.dll /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll $sources
+& $compiler /nologo /target:exe /optimize+ /define:PRIVATE_TEST /main:ElevenLabsMusicGenerator.Tests.TestHarness "/out:$testExe" "/reference:$root\Dependencies\NAudio.dll" "/resource:$root\Dependencies\NAudio.dll,ElevenLabsMusicGenerator.NAudio.dll" /reference:System.dll /reference:System.Core.dll /reference:System.Security.dll /reference:System.Runtime.Serialization.dll /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.dll /reference:System.Web.Extensions.dll /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll $sources
 if ($LASTEXITCODE -ne 0) {
     throw 'Test harness compilation failed.'
 }

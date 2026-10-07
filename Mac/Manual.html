@@ -16,6 +16,9 @@
 <li><a href="#updates">Updates</a></li><li><a href="#files-and-storage">Files and Storage</a></li>
 <li><a href="#credits">Credits</a></li></ul>
 <h2 id="changelog">Changelog</h2>
+<h3>1.4.1</h3>
+<p>Audio settings now brings together output-device selection, default format and optional sequential playback of new generations. F1 opens help for the focused control, including controls in app dialogs; Option-F1 opens usage analytics. Settings now use native Mac tabs whose names are available when navigating with the keyboard or VoiceOver.</p>
+<p>Introducing the companion <a href="https://github.com/OnjLouis/ElevenLabsSpeechGenerator">ElevenLabs Speech Generator</a> for speech, dialogue, transcription and voice conversion. Music and sound effects remain in this app.</p>
 <h3>1.4.0 - 27 September 2026</h3>
 <p>Check for Updates can now download, verify, install, and relaunch the Mac app. Startup checks remain on by default; optional silent installation is off by default. If replacement fails, the previous app is restored.</p>
 <h3>1.3.1 - 27 September 2026</h3>
@@ -58,7 +61,7 @@
 <p><strong>Suggest from Prompt</strong> asks ElevenLabs for a draft plan; review it before generation. Plan mode uses section durations instead of the main Length setting. It follows the plan rather than the plain prompt, and Force instrumental is unavailable. The current plan is restored when you reopen the app.</p>
 <p>A section heading such as <code>Verse</code> is sent with lyric lines as <code>[Verse]</code> followed by your text. You can also enter a short musical direction instead of lyrics. Suggestions are drafts, not a guarantee that every sung word will match. Plan requests are available for Music v2 and v2.5, not v1.</p>
 <h2 id="results-and-credits">Results And Credit Usage</h2>
-<p>The Status log in the main window lists request progress and each completed track on a separate line with its generation time, not its audio playing length. Completion also displays a notice. The music response does not provide a reliable per-request credit charge, so check <a href="https://elevenlabs.io/app/developers/analytics/usage">ElevenLabs Usage Analytics</a> for actual credit consumption. The same page opens from <strong>Help, Usage Analytics</strong>. A failed or cancelled request may still affect usage.</p>
+<p>The Status log in the main window lists request progress and each completed track on a separate line with its generation time, not its audio playing length. Completion displays a notice unless automatic playback is enabled. The music response does not provide a reliable per-request credit charge, so check <a href="https://elevenlabs.io/app/developers/analytics/usage">ElevenLabs Usage Analytics</a> for actual credit consumption. The same page opens from <strong>Help, Usage Analytics</strong>. A failed or cancelled request may still affect usage.</p>
 <p>Balance refreshes when the app opens and after generation. Press Command-R to refresh it or Command-B to focus it. It shows your included allowance, next reset, and any overage reported by ElevenLabs. Zero included credits can still allow paid overages or Pay As You Go. This <a href="https://elevenlabs.io/docs/api-reference/user/subscription/get">read-only check</a> does not spend credits, but cannot show your total spendable balance, an API-key limit, or the cost of a single generation. See your <a href="https://elevenlabs.io/app/subscription">subscription</a> for billing details. A restricted key needs <code>user_read</code> to show Balance; generation can still work without it.</p>
 <table><thead><tr><th>Action</th><th>What affects usage</th></tr></thead><tbody>
 <tr><td>Generate Music</td><td>Generated duration and number of variations.</td></tr>
@@ -73,6 +76,8 @@
 <p>Music and Sound FX prompts are saved together in <code>Prompt Drafts.json</code> in this app's Application Support folder. Each mode restores its own unfinished text after restarting the app. This draft file is application data, not a reusable generation prompt. Command-S saves the current prompt as an ordinary text document; Command-Shift-S chooses a new name. This is independent of the shared prompt file saved during generation.</p>
 <h2 id="cancellation-and-failure">Cancellation And Failure</h2>
 <p>Cancel stops the active request and removes incomplete temporary files. Variations completed before cancellation or a later failure are kept. Existing tracks are never overwritten.</p>
+<p>On the <strong>Audio</strong> tab of Settings, choose the playback device and default output format, and optionally enable <strong>Play new generations automatically in sequence</strong>. This is off by default. Only new audio from a successfully completed batch plays, one file at a time; existing tracks kept during resumption are not replayed. Cancelled or failed batches do not start playback automatically. Stop ends the current audio and the whole queue. Manually playing a result replaces the queue; changing the device stops it. Controls, Audio Settings opens this same Audio tab.</p>
+<p>Completed results also appear in the <strong>Generated audio</strong> list for manual playback. Press <strong>F1</strong> for brief help about the focused control, including controls in Settings and the plan editor. Read the explanation a line at a time; Close or Escape returns to the previous control. Open Manual opens the full guide.</p>
 <h2 id="keyboard-commands">Keyboard Commands</h2><table><thead><tr><th>Command</th><th>Shortcut</th></tr></thead><tbody>
 <tr><td>New prompt</td><td>Command-N</td></tr><tr><td>Open prompt</td><td>Command-O</td></tr><tr><td>Save prompt</td><td>Command-S</td></tr>
 <tr><td>Save prompt as</td><td>Command-Shift-S</td></tr><tr><td>Open Music folder</td><td>Command-Shift-O</td></tr><tr><td>Generate</td><td>Command-Return</td></tr>
@@ -80,7 +85,7 @@
 <tr><td>Edit plan</td><td>Command-P</td></tr><tr><td>Settings</td><td>Command-Comma; Escape closes Settings</td></tr>
 <tr><td>Toggle instrumental</td><td>Command-I</td></tr><tr><td>Toggle composition plan</td><td>Command-U</td></tr>
 <tr><td>Focus Model</td><td>Command-Shift-M</td></tr><tr><td>Focus Output Format</td><td>Command-Shift-F</td></tr>
-<tr><td>Manual</td><td>F1</td></tr><tr><td>Check for Updates</td><td>Shift-F1</td></tr>
+<tr><td>Help for focused control</td><td>F1</td></tr><tr><td>Full manual</td><td>Help menu</td></tr><tr><td>Usage analytics</td><td>Option-F1</td></tr><tr><td>Audio settings</td><td>Command-Shift-U</td></tr><tr><td>Play selected result</td><td>Return in the generated-audio list, or Play</td></tr><tr><td>Stop playback</td><td>Escape or Stop</td></tr><tr><td>Check for Updates</td><td>Shift-F1</td></tr>
 <tr><td>Project Page</td><td>Command-F1</td></tr></tbody></table>
 <p>Commands also appear in the standard macOS menus. VoiceOver can reach the prompt editor, settings, plan fields, confirmation, and status using ordinary Mac navigation. Controls provide short VoiceOver hints describing their purpose and relevant shortcuts.</p>
 <h2 id="updates">Updates</h2>
@@ -91,5 +96,6 @@
 <p>Generated audio and one shared prompt or plan file are saved in the selected Music folder. Optional returned lyrics, generation metadata, and title-naming batch records go into its <code>Lyrics</code> subfolder. Settings and prompt or plan drafts live in this user's Application Support folder; the API key remains in Keychain. Keep generated music and account data private when sharing files from the app.</p>
 <h2 id="credits">Credits</h2>
 <p>ElevenLabs Music Generator was developed with Codex under Andre Louis's direction and testing. Music generation is provided by the ElevenLabs Music API and uses the account and credits of the person running the app. The application is free software under the MIT License; the license is included with the download.</p>
+<p>For speech, dialogue, transcription and voice conversion, see the <a href="https://github.com/OnjLouis/ElevenLabsSpeechGenerator">companion ElevenLabs Speech Generator</a>.</p>
 <p>For questions or feedback, visit <a href="https://onj.me/contact">Andre Louis's contact page</a>. To support his work, choose <strong>Donate</strong> from the application or Help menu, or visit <a href="https://onj.me/donate">the donation page</a>.</p>
 </main></body></html>

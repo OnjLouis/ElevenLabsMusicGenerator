@@ -14,6 +14,13 @@ namespace ElevenLabsMusicGenerator
         [STAThread]
         private static void Main(string[] args)
         {
+            PlaybackDependency.Initialize();
+            Run(args);
+        }
+
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private static void Run(string[] args)
+        {
             if (ProgramUpdater.IsApplyUpdateCommand(args))
             {
                 ProgramUpdater.ApplyUpdateFromCommandLine(args);

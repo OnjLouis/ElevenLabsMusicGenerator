@@ -10,6 +10,8 @@ struct AppPreferences: Codable {
     var model = MusicModel.v25.rawValue
     var format = AudioFormat.wav.rawValue
     var includeDetails = true
+    var autoPlayGenerations: Bool? = false
+    var playbackDevice: String?
     var autoUpdateOnLaunch: Bool? = true
     var installUpdatesSilently: Bool? = false
     var soundEffects: SoundEffectOptions?
