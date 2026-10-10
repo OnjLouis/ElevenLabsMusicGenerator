@@ -15,6 +15,7 @@ namespace ElevenLabsMusicGenerator
         public bool UseCompositionPlan { get; set; }
         public bool SaveGeneratedDetails { get; set; }
         public bool AutoPlayGenerations { get; set; }
+        public bool CompletionSound { get; set; }
         public int PlaybackDevice { get; set; }
         public string OutputFormat { get; set; }
         public string ModelId { get; set; }
@@ -60,6 +61,7 @@ namespace ElevenLabsMusicGenerator
             settings.UseCompositionPlan = ReadBool(ini, "General", "UseCompositionPlan", false);
             settings.SaveGeneratedDetails = ReadBool(ini, "General", "SaveGeneratedDetails", true);
             settings.AutoPlayGenerations = ReadBool(ini, "Audio", "AutoPlayGenerations", false);
+            settings.CompletionSound = ReadBool(ini, "Audio", "CompletionSound", false);
             settings.PlaybackDevice = ReadInt(ini, "Audio", "PlaybackDevice", -1, -1, int.MaxValue);
             settings.OutputFormat = NormalizeOutputFormat(ini.Get("General", "OutputFormat", settings.OutputFormat));
             settings.ModelId = NormalizeModel(ini.Get("General", "ModelId", settings.ModelId));
@@ -121,6 +123,7 @@ namespace ElevenLabsMusicGenerator
             ini.Set("General", "UseCompositionPlan", UseCompositionPlan.ToString());
             ini.Set("General", "SaveGeneratedDetails", SaveGeneratedDetails.ToString());
             ini.Set("Audio", "AutoPlayGenerations", AutoPlayGenerations.ToString());
+            ini.Set("Audio", "CompletionSound", CompletionSound.ToString());
             ini.Set("Audio", "PlaybackDevice", PlaybackDevice.ToString(CultureInfo.InvariantCulture));
             ini.Set("General", "OutputFormat", NormalizeOutputFormat(OutputFormat));
             ini.Set("General", "ModelId", NormalizeModel(ModelId));

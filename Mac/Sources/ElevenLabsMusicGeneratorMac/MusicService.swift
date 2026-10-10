@@ -64,7 +64,7 @@ struct MusicService {
         request.timeoutInterval = 20 * 60
         request.setValue(key, forHTTPHeaderField: "xi-api-key")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("ElevenLabs Music Generator Mac/1.4.1", forHTTPHeaderField: "User-Agent")
+        request.setValue("ElevenLabs Music Generator Mac/1.4.2", forHTTPHeaderField: "User-Agent")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let start = Date()
         let (download, response) = try await session.download(for: request)
@@ -160,7 +160,7 @@ struct MusicService {
         request.httpMethod = method
         request.timeoutInterval = timeout
         request.setValue(key, forHTTPHeaderField: "xi-api-key")
-        request.setValue("ElevenLabs Music Generator Mac/1.4.1", forHTTPHeaderField: "User-Agent")
+        request.setValue("ElevenLabs Music Generator Mac/1.4.2", forHTTPHeaderField: "User-Agent")
         if let body {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONSerialization.data(withJSONObject: body)

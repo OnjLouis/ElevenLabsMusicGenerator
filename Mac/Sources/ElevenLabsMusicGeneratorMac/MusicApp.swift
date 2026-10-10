@@ -7,7 +7,7 @@ struct ElevenLabsMusicGeneratorApp: App {
     @Environment(\.openSettings) private var openSettings
 
     var body: some Scene {
-        WindowGroup("ElevenLabs Music and Sound FX Generator") {
+        WindowGroup(model.windowTitle) {
             MainView(model: model)
                 .onAppear { ContextHelp.shared.install(openManual: model.openManual) }
                 .frame(minWidth: 760, minHeight: 700)

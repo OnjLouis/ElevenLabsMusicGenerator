@@ -12,6 +12,35 @@ namespace ElevenLabsMusicGenerator
         private const int KeyDownMessage = 0x0100;
         private static readonly Dictionary<string, string> Instructions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
+            { "Composition sections", "Choose the section to edit. Sections play in the listed order; add, remove or reorder them with the section buttons." },
+            { "Section name", "Heading for the selected section, such as Intro, Verse or Chorus." },
+            { "Section duration in seconds", "Length of this section, from 3 to 120 seconds. Fractional seconds are accepted; the complete plan must not exceed 10 minutes." },
+            { "Lyrics and short directions", "Lyrics or short performance directions for this section, one line at a time." },
+            { "Include styles, one per line", "Styles to request for this section. Put each style on its own line." },
+            { "Exclude styles, one per line", "Styles to avoid in this section. Put each style on its own line." },
+            { "Context adherence", "Choose how closely this section follows the surrounding musical context. High favors continuity; lower settings allow more contrast." },
+            { "Add", "Append a new section to the end of the composition and select it for editing." },
+            { "Remove", "Remove the selected section from this plan. Changes are applied when you choose OK." },
+            { "Move up", "Move the selected section earlier in the composition." },
+            { "Move down", "Move the selected section later in the composition." },
+            { "Suggest from prompt", "Ask ElevenLabs to suggest a composition plan using the music prompt and requested length. Review the returned sections before generating audio." },
+            { "Open plan or details", "Load a saved composition plan or extract the plan from saved generation details. This replaces the plan being edited." },
+            { "Export plan", "Save the current composition plan as a reusable JSON file without generating audio." },
+            { "Force instrumental music", "Request music without vocals. A composition plan can specify its own vocal choices." },
+            { "Automatic sound effect duration", "Let ElevenLabs choose a suitable sound-effect length, up to 30 seconds." },
+            { "Default length in seconds", "Starting duration for new music prompts. A composition plan uses its own section lengths." },
+            { "Default number of variations", "Number of separate generations requested for a new prompt, from 1 to 10." },
+            { "Default to instrumental music", "Start new music prompts with Instrumental selected. Individual prompts can override this choice." },
+            { "Save generated lyrics and details", "Save returned lyrics and reusable generation information in the output folder's Lyrics subfolder. These files do not include your API key." },
+            { "Default output format", "Starting audio format for new prompts. The main window can override it for a prompt." },
+            { "ElevenLabs API key", "A private credential that lets this app use your ElevenLabs account. Allow Music or Sound Effects for generation and User read access for balance. Save Preferences to keep the key; Test API Key checks its access." },
+            { "Show API key", "Reveal or hide the credential in Preferences. Avoid revealing it during screen sharing." },
+            { "Get an ElevenLabs API key", "Open the ElevenLabs API keys page in your browser to create a key for your account." },
+            { "Check for updates", "Choose how often to check for a new version. Never disables automatic checks; manual checks remain available." },
+            { "OK", "Accept the settings or plan changes and return to the previous window." },
+            { "Cancel", "Cancel the current generation in the main window, or discard unaccepted edits in a dialog." },
+            { "Close", "Close this dialog and return to the previous window." },
+            { "Open manual", "Open the complete application guide in your browser." },
             { "Mode", "Choose the operation. Each mode keeps its own draft." },
             { "Voice", "Choose the voice used for speech or voice conversion. Refresh voices reloads the account choices." },
             { "Model", "Choose the generation model. Available options and limits depend on the selected mode and your account." },
@@ -46,6 +75,7 @@ namespace ElevenLabsMusicGenerator
             { "Include styles", "Styles to include for this section, one per line." },
             { "Exclude styles", "Styles to avoid for this section, one per line." },
             { "Playback device", "Choose the audio output used by this app. System default follows Windows." },
+            { "Play a completion sound", "Play a short signal when generation finishes. Automatic audio playback replaces this signal when enabled." },
             { "Play new generations automatically in sequence", "Off by default. Play only the new audio from a successfully completed batch, one file at a time. Stop ends the queue; cancelled or failed batches do not start automatically." },
             { "Generated audio", "Choose a saved result. Enter plays it; Escape stops the current audio and the rest of the queue." },
             { "Generate", "Review and confirm the music or sound-effects request. New generations send your prompt or plan to ElevenLabs and spend credits." },
@@ -101,7 +131,7 @@ namespace ElevenLabsMusicGenerator
             for (var current = control; current != null && !(current is Form); current = current.Parent)
             {
                 if (!string.IsNullOrEmpty(current.AccessibleName)) return current.AccessibleName;
-                if (current is ButtonBase) return current.Text.Replace("&", "").Trim().TrimEnd('.', ':');
+                if (current is ButtonBase || current is LinkLabel) return current.Text.Replace("&", "").Trim().TrimEnd('.', ':');
             }
             return "Current window";
         }
@@ -111,7 +141,7 @@ namespace ElevenLabsMusicGenerator
             if (Instructions.TryGetValue(ControlName(control), out text)) return text;
             for (var current = control; current != null && !(current is Form); current = current.Parent)
                 if (!string.IsNullOrEmpty(current.AccessibleDescription)) return current.AccessibleDescription;
-            return "Use this control to change the current task or its settings. Open the manual for the full workflow.";
+            return "No additional description is available for " + ControlName(control) + ".";
         }
         internal static void Show(Form owner, Action manual, Func<Control, string> describe = null)
         {

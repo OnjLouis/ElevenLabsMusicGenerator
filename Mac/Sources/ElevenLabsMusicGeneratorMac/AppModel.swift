@@ -99,6 +99,7 @@ final class AppModel: ObservableObject {
     var selectedModel: MusicModel { MusicModel(rawValue: preferences.model) ?? .v25 }
     var selectedFormat: AudioFormat { AudioFormat(rawValue: preferences.format) ?? .wav }
     var isSoundEffect: Bool { selectedModel == .soundEffects }
+    var windowTitle: String { "ElevenLabs Music and Sound FX Generator - \(prompt.utf16.count) / \(isSoundEffect ? GenerationRequest.soundEffectsPromptLimit : 4100) characters" }
     var usesPlan: Bool { !isSoundEffect && planEnabled }
 
     func modelChanged(from oldValue: String, to newValue: String) {
@@ -348,10 +349,9 @@ final class AppModel: ObservableObject {
                 }
                 let summary = "Generation complete. \(completed.count) new track(s) saved to \(request.outputFolder.path)."
                 addStatus(summary)
-                if preferences.autoPlayGenerations != true { NSSound.beep() }
-                NSApp.requestUserAttention(.informationalRequest)
+                if preferences.completionSound == true && preferences.autoPlayGenerations != true { NSSound.beep() }
+                if let app = NSApp { NSAccessibility.post(element: app.mainWindow ?? app, notification: .announcementRequested, userInfo: [.announcement: "Generation complete", .priority: NSAccessibilityPriorityLevel.high.rawValue]) }
                 if preferences.autoPlayGenerations == true { play(completed) }
-                else { notice = AppNotice(title: "Generation Complete", message: summary) }
             } catch is CancellationError {
                 addStatus("Generation cancelled. Completed tracks were kept.")
             } catch {

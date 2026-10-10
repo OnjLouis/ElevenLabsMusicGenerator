@@ -108,6 +108,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 Run("Sequential playback stop and stale completion", TestPlaybackQueue);
                 Run("Native audio sequence and file release", TestNativePlayback);
                 Run("Owned context help preserves focus and private values", TestContextHelp);
+                Run("Specific help covers main window, preferences and plan", TestContextHelpCoverage);
                 Run("Quoted output folder settings", TestQuotedOutputFolder);
                 Run("Quoted preferences save without a success popup", TestQuotedPreferencesSave);
                 Run("Sound effects model and request", TestSoundEffectsRequest);
@@ -251,6 +252,20 @@ namespace ElevenLabsMusicGenerator.Tests
             Assert(parse(new[] { "--CLEANUP-UPDATE", "update staging" }) == null, "Cleanup option must be case insensitive.");
             Assert(parse(new string[0]) == null && parse(new[] { "prompt.txt" }) == "prompt.txt", "Normal document startup changed.");
         }
+        private static void TestContextHelpCoverage()
+        {
+            using (var main = new MainForm(null)) CheckHelpCoverage(main);
+            using (var preferences = new PreferencesForm(new AppSettings(), 0)) CheckHelpCoverage(preferences);
+            using (var plan = new PlanEditorForm(null, "Test", 30, "music_v2", AppPaths.UserFolder, "")) CheckHelpCoverage(plan);
+        }
+        private static void CheckHelpCoverage(Control container)
+        {
+            foreach (var control in Descendants(container).Where(x => x is ButtonBase || x is TextBox || x is ComboBox || x is ListBox || x is NumericUpDown || x is LinkLabel || x is TabControl))
+            {
+                var help = ContextHelp.Description(control);
+                Assert(!help.Contains("additional description") && !help.Contains("full workflow") && !help.Contains("Use this control"), "Missing specific context help: " + container.Text + " / " + ContextHelp.ControlName(control));
+            }
+        }
 
         private static void TestConfirmationWording()
         {
@@ -370,7 +385,8 @@ namespace ElevenLabsMusicGenerator.Tests
                 Assert(prompt.TextLength == 450 && prompt.MaxLength == 450, "Sound Effects must cap visible input at 450 characters.");
                 Assert(counter.Text.Contains("0 remaining"), "The count must show remaining characters.");
                 var statusCount = (ToolStripStatusLabel)typeof(MainForm).GetField("promptCountStatus", flags).GetValue(form);
-                Assert(statusCount.Text == counter.Text && prompt.AccessibleDescription.Contains("0 remaining"), "Screen readers must be able to find the active prompt count.");
+                Assert(statusCount.Text == counter.Text && string.IsNullOrEmpty(prompt.AccessibleDescription), "The prompt must not repeat instructions or character counts on focus.");
+                Assert(form.Text == Program.DisplayName + " - 450 / 450 characters" && form.AccessibleName == form.Text, "Sound Effects must expose its full product name and live count in the window title.");
                 var automatic = (CheckBox)typeof(MainForm).GetField("automaticDurationCheckBox", flags).GetValue(form);
                 var options = (FlowLayoutPanel)typeof(MainForm).GetField("generationOptions", flags).GetValue(form);
                 Assert(automatic.Parent == options && options.Controls.IndexOf(automatic) + 1 == options.Controls.IndexOf(length.Parent.Controls.OfType<Label>().First(c => c.Text.Contains("Length in seconds"))), "Automatic duration must precede Length in the same tab container.");
@@ -385,6 +401,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 settings.ModelId = "music_v2_5";
                 method.Invoke(form, null);
                 Assert(counter.Text.Contains("451 of 4100 characters") && prompt.TextLength == 451 && prompt.MaxLength == 4100, "Switching back to Music must keep the full prompt.");
+                Assert(form.Text.EndsWith(" - 451 / 4100 characters") && string.IsNullOrEmpty(prompt.AccessibleDescription), "Music must expose its live count in the title without a verbose prompt description.");
                 Assert(length.Value == 120 && length.Enabled && instrumental.Enabled, "Returning to Music must restore its duration and controls.");
                 var model = (ComboBox)typeof(MainForm).GetField("modelComboBox", flags).GetValue(form);
                 model.SelectedIndex = 0;
@@ -656,6 +673,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 InstallUpdatesSilently = true,
                 LastPreferencesTab = 3,
                 AutoPlayGenerations = true,
+                CompletionSound = true,
                 PlaybackDevice = 2
             };
             settings.Save();
@@ -670,6 +688,7 @@ namespace ElevenLabsMusicGenerator.Tests
             Assert(loaded.UpdateCheckFrequency == "Weekly", "Update frequency did not round trip.");
             Assert(loaded.InstallUpdatesSilently, "Silent update setting did not round trip.");
             Assert(loaded.AutoPlayGenerations && loaded.PlaybackDevice == 2 && loaded.LastPreferencesTab == 3, "Audio preferences did not round trip.");
+            Assert(loaded.CompletionSound && !new AppSettings().CompletionSound, "Completion sound must round trip and remain opt-in.");
             Assert(!new AppSettings().AutoPlayGenerations && new AppSettings().PlaybackDevice == -1, "Fresh audio preferences must use system default and opt-in playback.");
         }
 
@@ -1429,7 +1448,17 @@ namespace ElevenLabsMusicGenerator.Tests
                     string shortcut;
                     if (!buttonShortcuts.TryGetValue(button.Text, out shortcut)) continue;
                     Assert(button.AccessibilityObject.KeyboardShortcut == shortcut, button.Text + " does not expose " + shortcut + " to a screen reader.");
-                    Assert(button.AccessibleDescription.IndexOf("shortcut", StringComparison.OrdinalIgnoreCase) < 0, button.Text + " repeats shortcut wording in its description.");
+                    Assert((button.AccessibleDescription ?? "").IndexOf("shortcut", StringComparison.OrdinalIgnoreCase) < 0, button.Text + " repeats shortcut wording in its description.");
+                    if (button.Text == "Generate")
+                    {
+                        Assert(string.IsNullOrEmpty(button.AccessibilityObject.Description), "Generate must not announce its help explanation on focus.");
+                        Assert(ContextHelp.Description(button).Contains("spend credits"), "Generate must retain its explanation in F1 help.");
+                    }
+                    if (button.Text == "Pla&y" || button.Text == "Stop")
+                    {
+                        Assert(string.IsNullOrEmpty(button.AccessibilityObject.Description), button.Text + " must not announce its help explanation on focus.");
+                        Assert(!string.IsNullOrWhiteSpace(ContextHelp.Description(button)), button.Text + " must retain F1 help.");
+                    }
                 }
 
                 var prompt = Descendants(form).OfType<TextBox>().First(control => control.AccessibleName == "Music prompt");

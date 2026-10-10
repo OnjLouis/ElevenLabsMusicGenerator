@@ -69,10 +69,14 @@ final class AudioPlaybackTests: XCTestCase {
         let original = try JSONEncoder().encode(preferences)
         var object = try XCTUnwrap(JSONSerialization.jsonObject(with: original) as? [String: Any])
         object.removeValue(forKey: "autoPlayGenerations")
+        object.removeValue(forKey: "completionSound")
         let restored = try JSONDecoder().decode(AppPreferences.self, from: JSONSerialization.data(withJSONObject: object))
         XCTAssertEqual(restored.outputFolder, "/custom/output")
         XCTAssertNotEqual(restored.autoPlayGenerations, true)
+        XCTAssertNotEqual(restored.completionSound, true)
         preferences.autoPlayGenerations = true
+        preferences.completionSound = true
         XCTAssertEqual(try JSONDecoder().decode(AppPreferences.self, from: JSONEncoder().encode(preferences)).autoPlayGenerations, true)
+        XCTAssertEqual(try JSONDecoder().decode(AppPreferences.self, from: JSONEncoder().encode(preferences)).completionSound, true)
     }
 }

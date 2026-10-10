@@ -40,12 +40,11 @@ struct MainView: View {
             Text("Prompt").font(.headline)
             KeyboardTextView(text: $model.prompt, editable: true,
                 accessibilityLabel: model.isSoundEffect ? "Sound effects prompt" : "Music prompt",
-                accessibilityHelp: (model.isSoundEffect ? "Type or paste a sound effect description." : "Type or paste a music description.") +
-                    " \(max(0, (model.isSoundEffect ? GenerationRequest.soundEffectsPromptLimit : 4100) - model.prompt.utf16.count)) characters remaining.",
+                accessibilityHelp: model.isSoundEffect ? "Type or paste a sound effect description." : "Type or paste a music description.",
                 maximumLength: model.isSoundEffect ? GenerationRequest.soundEffectsPromptLimit : 4100,
                 onTab: { focus = .baseName },
                 onBackTab: { focusTextView(statusView) },
-                onReady: { promptView = $0 })
+                onReady: { view in promptView = view; DispatchQueue.main.async { view.window?.title = model.windowTitle } })
                 .frame(minHeight: 160)
             Text("\(model.prompt.utf16.count) of \(model.isSoundEffect ? GenerationRequest.soundEffectsPromptLimit : 4100) characters; \(max(0, (model.isSoundEffect ? GenerationRequest.soundEffectsPromptLimit : 4100) - model.prompt.utf16.count)) remaining")
                 .font(.caption)
@@ -130,8 +129,7 @@ struct MainView: View {
                 Button("Generate") { model.prepareGeneration() }
                     .keyboardShortcut(.return, modifiers: .command)
                     .disabled(model.isBusy)
-                    .help("Generate audio, Command-Return")
-                    .accessibilityHint("Reviews the request before sending it to ElevenLabs. New generations can spend credits. Command-Return.")
+                    .accessibilityHint("Command+Enter. Confirm and start generation.")
                 Button("Cancel") { model.cancelGeneration() }
                     .disabled(!model.isBusy)
                     .help("Cancel the current generation")
@@ -151,6 +149,7 @@ struct MainView: View {
                 .onKeyPress(.escape) { model.stopPlayback(); return .handled }
         }
         .padding(20)
+        .onChange(of: model.windowTitle) { _, title in promptView?.window?.title = title }
         .onExitCommand { model.stopPlayback(); if model.isBusy { model.cancelGeneration() } }
         .sheet(isPresented: $model.showPlanEditor) { PlanEditorView(model: model) }
         .alert(model.isSoundEffect ? "Generate Sound Effects?" : "Generate Music?", isPresented: $model.showConfirmation) {

@@ -8,6 +8,7 @@ namespace ElevenLabsMusicGenerator
     internal static class Program
     {
         public const string AppName = "ElevenLabs Music Generator";
+        public const string DisplayName = "ElevenLabs Music and Sound FX Generator";
         public const string Version = AppVersion.Short;
         private const string MutexName = "OnjLouis.ElevenLabsMusicGenerator";
 

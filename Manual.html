@@ -35,6 +35,9 @@ code { font-family: Consolas, monospace; }
 </ul>
 
 <h2 id="changelog">Changelog</h2>
+<h3>1.4.2 - 10 October 2026</h3>
+<p>Screen-reader focus announcements for Generate, Play and Stop are shorter, while F1 continues to explain each control. Windows context help now gives specific descriptions throughout the main window, Preferences and composition-plan editor.</p>
+<p>The live window title now shows the prompt character count without repeating it in the prompt's screen-reader description. Successful generation updates the status log without an OK dialog. Audio settings offers an optional completion sound; automatic playback plays the new recordings instead.</p>
 <h3>1.4.1 - 7 October 2026</h3>
 <p>Windows update rollback now also removes program files that were absent before replacement, leaving personal files untouched.</p>
 <p>Windows updates reopen the app without trying to open a temporary update folder as a prompt.</p>
@@ -85,7 +88,7 @@ code { font-family: Consolas, monospace; }
 <h2 id="sound-effects">Generating Sound Effects</h2>
 <p>In the main window, press Alt+D and choose <strong>Sound Effects v2</strong> from Model. Enter a sound description of up to 450 characters, choose a base filename and variations, then Generate. Enable Sound Effects access for your API key on ElevenLabs. In Preferences, <strong>Test API key</strong> checks the selected feature. For Sound Effects, it first asks permission to generate and discard a 0.5-second test effect, which may spend credits. Cancel is the default choice. The separate read-only balance check reports whether <code>user_read</code> is enabled, even if the feature test fails; missing balance access does not mean generation access failed. For Music v1, the non-generating test uses a v2.5 plan request and cannot confirm v1 directly.</p>
 <p><strong>Automatic duration</strong> lets the service choose the length. Turn it off to enter 0.5 to 30 seconds. <strong>Loop sound effect</strong> requests a seamless loop. <strong>Prompt influence</strong> ranges from 0 to 1; a higher value follows your wording more closely. Sound Effects supports the app's 44.1 kHz WAV and MP3 formats. Music-only options are unavailable in this mode; switching back restores the music controls.</p>
-<p>The prompt counter shows characters used and remaining. Typing or pasting stops at the active model's limit: 450 characters for Sound Effects, 4,100 for Music. If you switch from a longer Music prompt to Sound Effects, the full Music draft is kept separately and restored when you return to Music.</p>
+<p>The live window title shows characters used and the active limit; the prompt counter also shows characters remaining. Typing or pasting stops at the active model's limit: 450 characters for Sound Effects, 4,100 for Music. If you switch from a longer Music prompt to Sound Effects, the full Music draft is kept separately and restored when you return to Music.</p>
 <p>Sound effects use the same output folder as music. Each batch saves one <code>.sfx.json</code> containing the prompt and its settings, without lyrics files. Choose <strong>Open Prompt or Plan</strong> to reuse this file; change the base filename for a new batch. Save Prompt still saves an ordinary text copy. Resuming an interrupted batch requires matching sound-effect settings and keeps completed audio. See the <a href="https://elevenlabs.io/docs/api-reference/text-to-sound-effects/convert">Sound Effects API reference</a> for service details.</p>
 
 <h2 id="composition-plans">Composition Plans And Lyrics</h2>
@@ -112,6 +115,7 @@ code { font-family: Consolas, monospace; }
 <p>Music and Sound FX prompts are saved together in <code>User\Prompt drafts.json</code> after editing and when the application closes. Each mode restores its own unfinished text, including after restarting the app. This draft file is application data, not a reusable generation prompt. The first manual Save Prompt opens the Save dialog in the music output folder selected in Preferences. Later saves update the chosen file; Save As starts in the current music output folder.</p>
 
 <h2 id="cancellation-and-failure">Cancellation And Failure</h2>
+<p>Successful generation updates Status Log without a success dialog. Enable <strong>Play a completion sound</strong> on the Audio tab in Preferences if you want a short signal. It is off by default. When automatic playback is enabled, the new recordings play instead of the signal.</p>
 <p>Cancel stops the active request and removes incomplete temporary files. Variations completed before cancellation or a later failure are kept. A track appears in the chosen folder only when it is complete. If downloaded audio cannot be processed, the data is kept beside the intended output so it is not lost.</p>
 
 <p>On the <strong>Audio</strong> tab of Preferences, choose the playback device and default output format, and optionally enable <strong>Play new generations automatically in sequence</strong>. This is off by default. Only new audio from a successfully completed batch plays, one file at a time; existing tracks kept during resumption are not replayed. Cancelled or failed batches do not start playback automatically. Stop ends the current audio and the whole queue. Manually playing a result replaces the queue; changing the device stops it. Options, Audio Settings opens this same Audio tab.</p>

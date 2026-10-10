@@ -38,6 +38,8 @@ struct AudioSettingsView: View {
             }.accessibilityHint("Choose the format for generated audio. The main window can change it too.")
             Toggle("Play new generations automatically in sequence", isOn: Binding(get: { model.preferences.autoPlayGenerations == true }, set: { model.stopPlayback(); model.preferences.autoPlayGenerations = $0 }))
                 .accessibilityHint("Off by default. Play only the new audio from a successfully completed batch, one file at a time. Stop ends the queue.")
+            Toggle("Play a completion sound", isOn: Binding(get: { model.preferences.completionSound == true }, set: { model.preferences.completionSound = $0 }))
+                .accessibilityHint("Play a sound when all requested generations finish successfully.")
         }.padding(18).onAppear { devices = AudioDevices.list() }
     }
 }

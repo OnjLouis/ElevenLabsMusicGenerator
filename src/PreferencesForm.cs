@@ -17,6 +17,7 @@ namespace ElevenLabsMusicGenerator
         private readonly CheckBox instrumentalCheckBox;
         private readonly CheckBox detailsCheckBox;
         private readonly CheckBox autoPlayCheckBox;
+        private readonly CheckBox completionSoundCheckBox;
         private readonly ComboBox playbackDeviceComboBox;
         private readonly ComboBox formatComboBox;
         private readonly TextBox apiKeyTextBox;
@@ -74,9 +75,11 @@ namespace ElevenLabsMusicGenerator
             var audio = NewPageLayout();
             playbackDeviceComboBox = AudioDevicesForm.DeviceList(settings.PlaybackDevice);
             autoPlayCheckBox = new CheckBox { Text = "Play new &generations automatically in sequence", AutoSize = true, AccessibleName = "Play new generations automatically in sequence", Checked = settings.AutoPlayGenerations };
+            completionSoundCheckBox = new CheckBox { Text = "Play a &completion sound", AutoSize = true, AccessibleName = "Play a completion sound", Checked = settings.CompletionSound };
             AddLabeledControl(audio, "Playback &device:", playbackDeviceComboBox);
             AddLabeledControl(audio, "Default &format:", formatComboBox);
-            AddFullWidthControl(audio, autoPlayCheckBox); audioPage.Controls.Add(audio);
+            AddFullWidthControl(audio, autoPlayCheckBox);
+            AddFullWidthControl(audio, completionSoundCheckBox); audioPage.Controls.Add(audio);
 
             var api = NewPageLayout();
             apiKeyTextBox = NewTextBox("ElevenLabs API key");
@@ -206,6 +209,7 @@ namespace ElevenLabsMusicGenerator
             settings.DefaultInstrumental = instrumentalCheckBox.Checked;
             settings.SaveGeneratedDetails = detailsCheckBox.Checked;
             settings.AutoPlayGenerations = autoPlayCheckBox.Checked;
+            settings.CompletionSound = completionSoundCheckBox.Checked;
             settings.PlaybackDevice = playbackDeviceComboBox.SelectedIndex - 1;
             settings.OutputFormat = StoredFormat(Convert.ToString(formatComboBox.SelectedItem));
             settings.UpdateCheckFrequency = AppSettings.NormalizeUpdateFrequency(Convert.ToString(updateFrequencyComboBox.SelectedItem).Replace("At startup", "Startup"));

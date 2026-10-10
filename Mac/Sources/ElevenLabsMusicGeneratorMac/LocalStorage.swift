@@ -11,6 +11,7 @@ struct AppPreferences: Codable {
     var format = AudioFormat.wav.rawValue
     var includeDetails = true
     var autoPlayGenerations: Bool? = false
+    var completionSound: Bool? = false
     var playbackDevice: String?
     var autoUpdateOnLaunch: Bool? = true
     var installUpdatesSilently: Bool? = false

@@ -60,6 +60,9 @@ final class HelpPanel: NSPanel {
 
 @MainActor final class ContextHelp: NSObject {
     static func description(title: String, hint: String?) -> String {
+        if title.lowercased() == "generate" {
+            return "Review and confirm the music or sound-effects request. New generations send your prompt or plan to ElevenLabs and spend credits."
+        }
         if title.lowercased() == "api key" {
             return "An ElevenLabs key is a private credential that lets this app use your account. Create one on the ElevenLabs API keys page and allow Music or Sound Effects plus User read access for balance. Paste it in Settings and choose Save Key. Never share it; generation may spend your credits. Test Key explains which permissions are available."
         }

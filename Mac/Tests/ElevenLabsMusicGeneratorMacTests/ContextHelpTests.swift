@@ -3,6 +3,11 @@ import XCTest
 @testable import ElevenLabsMusicGeneratorMac
 
 final class ContextHelpTests: XCTestCase {
+    @MainActor func testGenerateHelpIsSeparateFromItsShortHint() {
+        let help = ContextHelp.description(title: "Generate", hint: "Command+Enter. Confirm and start generation.")
+        XCTAssertTrue(help.contains("spend credits"))
+        XCTAssertTrue(help.contains("prompt or plan"))
+    }
     @MainActor func testApplicationAccessibilityFocusGetter() {
         let app = NSApplication.shared
         XCTAssertTrue(app.responds(to: NSSelectorFromString("accessibilityFocusedUIElement")))

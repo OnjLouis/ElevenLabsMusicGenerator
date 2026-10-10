@@ -59,12 +59,12 @@ namespace ElevenLabsMusicGenerator
             playback.Failed += ex => { if (!IsDisposed) using (var result = new ApiKeyTestResultForm(ex.Message, "Could not play")) result.ShowDialog(this); };
             playback.Started += path => AppLog.Write("Playing " + Path.GetFileName(path) + ".");
             Disposed += delegate { playback.Dispose(); };
-            Text = "ElevenLabs Music and Sound FX Generator";
+            Text = Program.DisplayName;
             StartPosition = FormStartPosition.CenterScreen;
             MinimumSize = new Size(760, 600);
             Size = new Size(900, 700);
             KeyPreview = true;
-            AccessibleName = "ElevenLabs Music and Sound FX Generator";
+            AccessibleName = Program.DisplayName;
             AccessibleDescription = "Accessible portable utility for generating music and sound effects with ElevenLabs.";
             if (!settings.WindowBounds.IsEmpty && Screen.AllScreens.Any(screen => screen.WorkingArea.IntersectsWith(settings.WindowBounds)))
             {
@@ -149,7 +149,7 @@ namespace ElevenLabsMusicGenerator
             root.Controls.Add(nameRow, 0, 3);
 
             var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(0, 8, 0, 4) };
-            generateButton = NewButton("Generate", "Review and generate audio variations using ElevenLabs credits", "Ctrl+Enter");
+            generateButton = NewButton("Generate", null, "Ctrl+Enter");
             generateButton.Click += delegate { StartGeneration(); };
             cancelButton = NewButton("&Cancel", "Cancel the current generation", "Esc");
             cancelButton.Enabled = false;
@@ -162,8 +162,8 @@ namespace ElevenLabsMusicGenerator
             helpButton.Click += delegate { OpenManual(); };
             buttons.Controls.Add(generateButton);
             buttons.Controls.Add(cancelButton);
-            var playButton = NewButton("Pla&y", "Play the selected generated audio", "Alt+Y"); playButton.Click += delegate { PlaySelected(); };
-            var stopButton = NewButton("Stop", "Stop the current audio and remaining queue", "Esc"); stopButton.Click += delegate { playback.Stop(); };
+            var playButton = NewButton("Pla&y", null, "Alt+Y"); playButton.Click += delegate { PlaySelected(); };
+            var stopButton = NewButton("Stop", null, "Esc"); stopButton.Click += delegate { playback.Stop(); };
             buttons.Controls.Add(playButton); buttons.Controls.Add(stopButton);
             buttons.Controls.Add(openOutputButton);
             buttons.Controls.Add(preferencesButton);
@@ -352,7 +352,7 @@ namespace ElevenLabsMusicGenerator
                 });
                 SetStatus("Generation complete. Saved " + completed.Count + " new track" + (completed.Count == 1 ? "" : "s") + "; kept " + plan.ExistingCount + " existing." + RunStatistics(completed, elapsed.Elapsed));
                 if (settings.AutoPlayGenerations) playback.PlaySequence(completed.Select(item => item.OutputPath), settings.PlaybackDevice);
-                else MessageBox.Show(this, "Generation completed successfully. Existing tracks were kept unchanged." + Environment.NewLine + Environment.NewLine + string.Join(Environment.NewLine, completed.Select(item => Path.GetFileName(item.OutputPath)).ToArray()), Program.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                if (settings.CompletionSound && !settings.AutoPlayGenerations) System.Media.SystemSounds.Asterisk.Play();
             }
             catch (OperationCanceledException)
             {
@@ -817,8 +817,8 @@ namespace ElevenLabsMusicGenerator
             var limit = settings.ModelId == MusicGenerationRequest.SoundEffectsModel ? MusicGenerationRequest.SoundEffectsPromptLimit : 4100;
             characterCountLabel.Text = promptTextBox.TextLength + " of " + limit + " characters; " + Math.Max(0, limit - promptTextBox.TextLength) + " remaining";
             promptCountStatus.Text = characterCountLabel.Text;
-            promptTextBox.AccessibleDescription = "Describe the " + (settings.ModelId == MusicGenerationRequest.SoundEffectsModel ? "sound effect" : "music") +
-                " to generate. " + characterCountLabel.Text + ".";
+            promptTextBox.AccessibleDescription = null;
+            Text = AccessibleName = Program.DisplayName + " - " + promptTextBox.TextLength + " / " + limit + " characters";
         }
         private string HelpDescription(Control control) { return control == promptTextBox ? ContextHelp.Description(control) + "\r\n\r\n" + characterCountLabel.Text + "." : ContextHelp.Description(control); }
 
