@@ -66,6 +66,7 @@ struct ElevenLabsMusicGeneratorApp: App {
                     .keyboardShortcut("f", modifiers: [.command, .shift])
             }
             CommandGroup(replacing: .help) {
+                Button("Version History...") { VersionHistory.show() }
                 Button("Help for Focused Control") { ContextHelp.shared.show() }
                     .keyboardShortcut(KeyEquivalent("\u{F704}"), modifiers: [])
                 Button("ElevenLabs Music and Sound FX Generator Help") { model.openManual() }

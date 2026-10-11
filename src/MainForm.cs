@@ -259,11 +259,12 @@ namespace ElevenLabsMusicGenerator
             options.DropDownItems.Add(MenuCommand("&Stop Playback", delegate { playback.Stop(); }, Keys.None, "Esc"));
 
             var help = new ToolStripMenuItem("&Help");
-            help.DropDownItems.Add(MenuCommand("&Check for Updates...", delegate { UpdateService.CheckForUpdates(this, settings, false); }, Keys.Shift | Keys.F1, "Shift+F1"));
+            help.DropDownItems.Add(MenuCommand("Check for &Updates...", delegate { UpdateService.CheckForUpdates(this, settings, false); }, Keys.Shift | Keys.F1, "Shift+F1"));
+            help.DropDownItems.Add(new ToolStripMenuItem("&Version History...", null, delegate { VersionHistory.Show(this); }));
             help.DropDownItems.Add(MenuCommand("Help for Focused &Control", delegate { ContextHelp.Show(this, OpenManual, HelpDescription); }, Keys.F1, "F1"));
             help.DropDownItems.Add(new ToolStripMenuItem("ElevenLabs Music and Sound FX Generator &Help", null, delegate { OpenManual(); }));
             help.DropDownItems.Add(MenuCommand("&Project Page", delegate { OpenProjectPage(); }, Keys.Control | Keys.F1, "Ctrl+F1"));
-            help.DropDownItems.Add(MenuCommand("&Usage Analytics", delegate { OpenUsageAnalytics(); }, Keys.Alt | Keys.F1, "Alt+F1"));
+            help.DropDownItems.Add(MenuCommand("Usage Anal&ytics", delegate { OpenUsageAnalytics(); }, Keys.Alt | Keys.F1, "Alt+F1"));
             help.DropDownItems.Add(new ToolStripMenuItem("&Donate", null, delegate { OpenDonatePage(); }));
             help.DropDownItems.Add(new ToolStripMenuItem("&About", null, delegate { ShowAbout(); }));
             menu.Items.Add(file);

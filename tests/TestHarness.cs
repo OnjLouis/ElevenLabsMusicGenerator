@@ -18,6 +18,33 @@ namespace ElevenLabsMusicGenerator.Tests
     internal static class TestHarness
     {
         private static int passed;
+        private static void TestVersionHistoryMenu()
+        {
+            using (var form = new MainForm(null))
+            {
+                var help = form.MainMenuStrip.Items.OfType<ToolStripMenuItem>().First(x => x.Text.Replace("&", "") == "Help");
+                Assert(help.DropDownItems.OfType<ToolStripMenuItem>().Any(x => x.Text.Replace("&", "").Equals("Version history...", StringComparison.OrdinalIgnoreCase)), "Help must contain Version History.");
+                var accessKeys = help.DropDownItems.OfType<ToolStripMenuItem>().Where(x => x.Text.Contains("&")).Select(x => char.ToUpperInvariant(x.Text[x.Text.IndexOf('&') + 1]));
+                Assert(accessKeys.GroupBy(x => x).All(x => x.Count() == 1), "Help menu access keys must be distinct.");
+                Assert(VersionHistory.Text.StartsWith(Program.Version + Environment.NewLine + Environment.NewLine) && VersionHistory.Text.Contains(Environment.NewLine + Environment.NewLine + "1.4.2" + Environment.NewLine), "History must show this version before the previous release.");
+                Assert(!VersionHistory.Text.Contains("\\n") && !VersionHistory.Text.Replace("\r\n", "").Contains("\n"), "History must use native Windows line breaks.");
+                using (var dialog = VersionHistory.CreateDialog())
+                {
+                    dialog.StartPosition = FormStartPosition.Manual;
+                    dialog.Location = new System.Drawing.Point(-2000, -2000);
+                    dialog.Show(form);
+                    Application.DoEvents();
+                    var text = Descendants(dialog).OfType<TextBox>().Single();
+                    var close = Descendants(dialog).OfType<Button>().Single();
+                    Assert(dialog.Owner == form && !dialog.ShowInTaskbar, "History must remain owned by the app, not a separate taskbar window.");
+                    Assert(text.ReadOnly && text.Multiline && text.TabStop && text.Focused && text.Text == VersionHistory.Text, "History must open focused in a readable, copyable edit.");
+                    Assert(text.AccessibleName == "Version history" && string.IsNullOrEmpty(text.AccessibleDescription), "History must have a concise screen-reader name.");
+                    Assert(dialog.CancelButton == close && dialog.AcceptButton == close, "Escape and Enter must close history.");
+                    dialog.Close();
+                }
+            }
+        }
+
         private static void TestNativePlayback()
         {
             var folder = Path.Combine(AppPaths.AppFolder, "Native playback test");
@@ -103,6 +130,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 if (args.Length == 2 && args[0] == "--live-plan-smoke") return RunLivePlanSmoke(args[1]);
                 if (args.Length == 3 && args[0] == "--live-plan-compose-smoke") return RunLivePlanComposeSmoke(args[1], args[2]);
                 if (args.Length == 2 && args[0] == "--private-updater-smoke") return RunPrivateUpdaterSmoke(args[1]);
+                Run("Version history is available from Help", TestVersionHistoryMenu);
                 Run("Startup separates updater options from documents", TestStartupArguments);
                 Run("Settings round trip", TestSettingsRoundTrip);
                 Run("Sequential playback stop and stale completion", TestPlaybackQueue);
@@ -234,7 +262,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 {
                     Application.DoEvents(); Thread.Sleep(10);
                 }
-                Assert(Control.ModifierKeys == Keys.None, "Release desktop modifier keys before testing unmodified F1.");
+                Assert(Control.ModifierKeys == Keys.None, "Release desktop modifier keys before testing unmodified F1. Detected: " + Control.ModifierKeys);
                 timer.Start(); guard.Start();
                 var message = System.Windows.Forms.Message.Create(key.Handle, 0x0100, (IntPtr)(int)System.Windows.Forms.Keys.F1, IntPtr.Zero);
                 Assert(System.Windows.Forms.Application.FilterMessage(ref message), "F1 must work inside an owned Preferences dialog. Message loop: " + Application.MessageLoop + "; modifiers: " + Control.ModifierKeys);
@@ -1413,7 +1441,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 var projectMenu = helpMenu.DropDownItems.OfType<ToolStripMenuItem>().FirstOrDefault(item => item.Text == "&Project Page");
                 Assert(projectMenu != null && projectMenu.ShortcutKeys == (Keys.Control | Keys.F1), "Project page shortcut is missing.");
                 Assert(helpMenu.DropDownItems.OfType<ToolStripMenuItem>().Any(item => item.Text == "&Donate"), "Help, Donate is missing.");
-                Assert(helpMenu.DropDownItems.OfType<ToolStripMenuItem>().Any(item => item.Text == "&Usage Analytics"), "Help, Usage Analytics is missing.");
+                Assert(helpMenu.DropDownItems.OfType<ToolStripMenuItem>().Any(item => item.Text == "Usage Anal&ytics"), "Help, Usage Analytics is missing.");
                 Assert(!helpMenu.DropDownItems.OfType<ToolStripMenuItem>().Any(item => item.Text.Contains("Balance")), "Balance should stay on the main window, not in Help.");
                 var optionsMenu = form.MainMenuStrip.Items.OfType<ToolStripMenuItem>().First(item => item.Text == "&Options");
                 Assert(optionsMenu.DropDownItems.OfType<ToolStripMenuItem>().Any(item => item.Text == "Refresh &Balance" && item.ShortcutKeys == Keys.F5),
@@ -1424,8 +1452,8 @@ namespace ElevenLabsMusicGenerator.Tests
                     { "&Save Prompt", "Ctrl+S" }, { "Save Prompt &As...", "Ctrl+Shift+S" },
                     { "Open Output &Folder", "Ctrl+Shift+O" }, { "&Generate", "Ctrl+Enter" },
                     { "&Cancel Generation", "Esc" }, { "&Preferences...", "Ctrl+," },
-                    { "Refresh &Balance", "F5" }, { "&Check for Updates...", "Shift+F1" },
-                    { "Help for Focused &Control", "F1" }, { "&Usage Analytics", "Alt+F1" },
+                    { "Refresh &Balance", "F5" }, { "Check for &Updates...", "Shift+F1" },
+                    { "Help for Focused &Control", "F1" }, { "Usage Anal&ytics", "Alt+F1" },
                     { "&Project Page", "Ctrl+F1" }
                 };
                 foreach (var item in form.MainMenuStrip.Items.OfType<ToolStripMenuItem>().SelectMany(menu => menu.DropDownItems.OfType<ToolStripMenuItem>()))
