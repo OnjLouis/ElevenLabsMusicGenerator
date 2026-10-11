@@ -338,7 +338,7 @@ namespace ElevenLabsMusicGenerator
 
         private static ComboBox NewDropDown(string accessibleName, string[] values)
         {
-            var combo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260, AccessibleName = accessibleName };
+            var combo = new PrefixComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260, AccessibleName = accessibleName };
             combo.Items.AddRange(values);
             return combo;
         }

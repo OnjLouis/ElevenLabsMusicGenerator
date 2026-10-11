@@ -40,6 +40,22 @@ final class ContextHelpTests: XCTestCase {
         XCTAssertEqual((editor.nextKeyView as? NSButton)?.title, "Open Manual")
         XCTAssertEqual((editor.nextKeyView?.nextKeyView as? NSButton)?.title, "Close")
         XCTAssertTrue(editor.nextKeyView?.nextKeyView?.nextKeyView === editor)
+        panel.makeKeyAndOrderFront(nil)
+        panel.makeFirstResponder(editor)
+        let tab = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: panel.windowNumber, context: nil, characters: "\t", charactersIgnoringModifiers: "\t", isARepeat: false, keyCode: 48)!
+        panel.sendEvent(tab)
+        XCTAssertEqual((panel.firstResponder as? NSButton)?.title, "Open Manual")
+        panel.sendEvent(tab)
+        XCTAssertEqual((panel.firstResponder as? NSButton)?.title, "Close")
+        panel.sendEvent(tab)
+        XCTAssertTrue(panel.firstResponder === editor)
+        let backTab = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .shift, timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: panel.windowNumber, context: nil, characters: "\t", charactersIgnoringModifiers: "\t", isARepeat: false, keyCode: 48)!
+        panel.sendEvent(backTab)
+        XCTAssertEqual((panel.firstResponder as? NSButton)?.title, "Close")
+        panel.sendEvent(backTab)
+        XCTAssertEqual((panel.firstResponder as? NSButton)?.title, "Open Manual")
+        panel.sendEvent(backTab)
+        XCTAssertTrue(panel.firstResponder === editor)
         var closed = 0
         panel.finish = { closed += 1 }
         panel.cancelOperation(nil); panel.performClose(nil)

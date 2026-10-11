@@ -3,17 +3,14 @@ import AppKit
 @MainActor
 enum VersionHistory {
     static let text = """
+    1.4.4
+
+    Maintenance release. The Windows app gains multi-letter dropdown navigation; Mac controls are unchanged.
+
     1.4.3
 
     Version History is now available from the Help menu, including when offline.
     The app opens with keyboard focus in the prompt editor.
-
-    1.4.2
-
-    - Shorter screen-reader announcements for Generate, Play and Stop, with detailed explanations still available through F1.
-    - The window title shows the prompt character count without repeating it in the prompt description.
-    - Successful generation updates the status log without an OK dialog. Audio settings offers an optional completion sound or automatic playback of new recordings.
-    - Windows context help provides specific descriptions throughout the main window, Preferences and composition-plan editor.
     """
 
     static func make() -> (NSAlert, NSTextView) {

@@ -76,7 +76,7 @@ namespace ElevenLabsMusicGenerator
             wordsBox = NewTextBox("Lyrics and short directions", true, 140);
             positiveBox = NewTextBox("Include styles, one per line", true, 90);
             negativeBox = NewTextBox("Exclude styles, one per line", true, 90);
-            adherenceBox = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 180, AccessibleName = "Context adherence" };
+            adherenceBox = new PrefixComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 180, AccessibleName = "Context adherence" };
             adherenceBox.Items.AddRange(new object[] { "high", "medium", "low" });
             AddField(fields, "Section &name:", nameBox);
             AddField(fields, "&Time in seconds:", durationBox);

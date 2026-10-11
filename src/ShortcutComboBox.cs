@@ -2,7 +2,7 @@ using System.Windows.Forms;
 
 namespace ElevenLabsMusicGenerator
 {
-    internal sealed class ShortcutComboBox : ComboBox
+    internal sealed class ShortcutComboBox : PrefixComboBox
     {
         public string ShortcutText { get; set; }
 

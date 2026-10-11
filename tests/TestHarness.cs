@@ -18,6 +18,28 @@ namespace ElevenLabsMusicGenerator.Tests
     internal static class TestHarness
     {
         private static int passed;
+        [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        private static extern IntPtr SendMessage(IntPtr window, int message, IntPtr wParam, IntPtr lParam);
+        private static void TestDropdownPrefixes()
+        {
+            using (var main = new MainForm(null))
+            using (var preferences = new PreferencesForm(new AppSettings(), 0))
+            using (var plan = new PlanEditorForm(null, "", 30, "music_v2", AppPaths.AppFolder, ""))
+            using (var host = new Form { StartPosition = FormStartPosition.Manual, Location = new System.Drawing.Point(-2000, -2000) })
+            {
+                var dropdowns = new Control[] { main, preferences, plan }.SelectMany(Descendants).OfType<ComboBox>().ToArray();
+                Assert(dropdowns.Length >= 5, "Dropdown audit did not cover main, Preferences and plan controls.");
+                host.Show();
+                foreach (var combo in dropdowns)
+                {
+                    host.Controls.Add(combo); combo.Visible = true; combo.Enabled = true; combo.Items.Clear();
+                    combo.Items.AddRange(new object[] { "MP3 44.1 kHz, 128 kbps", "MP3 48 kHz, 192 kbps", "MP3 48 kHz, 240 kbps", "PCM WAV" });
+                    combo.SelectedIndex = 3; combo.Focus();
+                    foreach (char letter in "mp3 48 khz, 240") SendMessage(combo.Handle, 0x0102, new IntPtr(letter), IntPtr.Zero);
+                    Assert(Convert.ToString(combo.SelectedItem) == "MP3 48 kHz, 240 kbps" && combo.Focused, combo.AccessibleName + " must support multi-letter navigation including spaces and digits.");
+                }
+            }
+        }
         private static void TestVersionHistoryMenu()
         {
             using (var form = new MainForm(null))
@@ -26,7 +48,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 Assert(help.DropDownItems.OfType<ToolStripMenuItem>().Any(x => x.Text.Replace("&", "").Equals("Version history...", StringComparison.OrdinalIgnoreCase)), "Help must contain Version History.");
                 var accessKeys = help.DropDownItems.OfType<ToolStripMenuItem>().Where(x => x.Text.Contains("&")).Select(x => char.ToUpperInvariant(x.Text[x.Text.IndexOf('&') + 1]));
                 Assert(accessKeys.GroupBy(x => x).All(x => x.Count() == 1), "Help menu access keys must be distinct.");
-                Assert(VersionHistory.Text.StartsWith(Program.Version + Environment.NewLine + Environment.NewLine) && VersionHistory.Text.Contains(Environment.NewLine + Environment.NewLine + "1.4.2" + Environment.NewLine), "History must show this version before the previous release.");
+                Assert(VersionHistory.Text.StartsWith(Program.Version + Environment.NewLine + Environment.NewLine) && VersionHistory.Text.Contains(Environment.NewLine + Environment.NewLine + "1.4.3" + Environment.NewLine), "History must show this version before the previous release.");
                 Assert(!VersionHistory.Text.Contains("\\n") && !VersionHistory.Text.Replace("\r\n", "").Contains("\n"), "History must use native Windows line breaks.");
                 using (var dialog = VersionHistory.CreateDialog())
                 {
@@ -130,6 +152,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 if (args.Length == 2 && args[0] == "--live-plan-smoke") return RunLivePlanSmoke(args[1]);
                 if (args.Length == 3 && args[0] == "--live-plan-compose-smoke") return RunLivePlanComposeSmoke(args[1], args[2]);
                 if (args.Length == 2 && args[0] == "--private-updater-smoke") return RunPrivateUpdaterSmoke(args[1]);
+                Run("All dropdowns support multi-letter navigation", TestDropdownPrefixes);
                 Run("Version history is available from Help", TestVersionHistoryMenu);
                 Run("Startup separates updater options from documents", TestStartupArguments);
                 Run("Settings round trip", TestSettingsRoundTrip);
