@@ -6,6 +6,7 @@ enum VersionHistory {
     1.4.3
 
     Version History is now available from the Help menu, including when offline.
+    The app opens with keyboard focus in the prompt editor.
 
     1.4.2
 

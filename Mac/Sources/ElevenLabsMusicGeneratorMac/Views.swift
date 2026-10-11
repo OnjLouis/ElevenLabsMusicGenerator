@@ -7,6 +7,7 @@ struct MainView: View {
     @State private var promptView: TabAwareTextView?
     @State private var balanceView: TabAwareTextView?
     @State private var statusView: TabAwareTextView?
+    @State private var initialFocusPending = true
     @FocusState private var focus: FocusField?
 
     private enum FocusField { case baseName, model, outputFormat }
@@ -42,9 +43,10 @@ struct MainView: View {
                 accessibilityLabel: model.isSoundEffect ? "Sound effects prompt" : "Music prompt",
                 accessibilityHelp: model.isSoundEffect ? "Type or paste a sound effect description." : "Type or paste a music description.",
                 maximumLength: model.isSoundEffect ? GenerationRequest.soundEffectsPromptLimit : 4100,
+                initialFocus: initialFocusPending,
                 onTab: { focus = .baseName },
                 onBackTab: { focusTextView(statusView) },
-                onReady: { view in promptView = view; DispatchQueue.main.async { view.window?.title = model.windowTitle } })
+                onReady: { view in promptView = view; initialFocusPending = false; DispatchQueue.main.async { view.window?.title = model.windowTitle } })
                 .frame(minHeight: 160)
             Text("\(model.prompt.utf16.count) of \(model.isSoundEffect ? GenerationRequest.soundEffectsPromptLimit : 4100) characters; \(max(0, (model.isSoundEffect ? GenerationRequest.soundEffectsPromptLimit : 4100) - model.prompt.utf16.count)) remaining")
                 .font(.caption)
