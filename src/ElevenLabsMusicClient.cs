@@ -23,7 +23,7 @@ namespace ElevenLabsMusicGenerator
         }
     }
 
-    internal sealed class ElevenLabsMusicClient
+    internal sealed partial class ElevenLabsMusicClient
     {
         private const string DefaultApiRoot = "https://api.elevenlabs.io";
         private const int RequestTimeoutMilliseconds = 20 * 60 * 1000;
@@ -376,7 +376,12 @@ namespace ElevenLabsMusicGenerator
                     statusCode = response.StatusCode;
                     using (response)
                     using (var stream = response.GetResponseStream())
-                    using (var reader = new StreamReader(stream)) body = reader.ReadToEnd();
+                    using (var reader = new StreamReader(stream))
+                    {
+                        var buffer = new char[65536];
+                        var count = reader.ReadBlock(buffer, 0, buffer.Length);
+                        body = new string(buffer, 0, count);
+                    }
                 }
                 catch
                 {
@@ -404,10 +409,20 @@ namespace ElevenLabsMusicGenerator
 
         private static string FindMessage(object value)
         {
+            var items = value as object[];
+            if (items != null)
+            {
+                foreach (var item in items)
+                {
+                    var message = FindMessage(item);
+                    if (message.Length > 0) return message;
+                }
+                return string.Empty;
+            }
             var map = value as Dictionary<string, object>;
             if (map != null)
             {
-                foreach (var key in new[] { "message", "detail", "error" })
+                foreach (var key in new[] { "message", "detail", "error", "msg" })
                 {
                     object child;
                     if (!map.TryGetValue(key, out child)) continue;

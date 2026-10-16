@@ -154,6 +154,7 @@ struct MainView: View {
         .onChange(of: model.windowTitle) { _, title in promptView?.window?.title = title }
         .onExitCommand { model.stopPlayback(); if model.isBusy { model.cancelGeneration() } }
         .sheet(isPresented: $model.showPlanEditor) { PlanEditorView(model: model) }
+        .sheet(isPresented: $model.showVideoSoundtrack) { VideoSoundtrackView(parent: model) }
         .alert(model.isSoundEffect ? "Generate Sound Effects?" : "Generate Music?", isPresented: $model.showConfirmation) {
             Button("Generate") { model.beginGeneration() }
                 .accessibilityHint("Send the confirmed request to ElevenLabs. Credits may be spent.")

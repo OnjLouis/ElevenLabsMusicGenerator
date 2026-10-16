@@ -33,6 +33,7 @@ namespace ElevenLabsMusicGenerator
         private readonly CheckBox instrumentalCheckBox;
         private readonly CheckBox usePlanCheckBox;
         private readonly Button editPlanButton;
+        private ToolStripMenuItem soundtrackMenuItem;
         private readonly TextBox baseNameTextBox;
         private readonly Button generateButton;
         private readonly Button cancelButton;
@@ -75,11 +76,13 @@ namespace ElevenLabsMusicGenerator
             MainMenuStrip = BuildMenu();
             Controls.Add(MainMenuStrip);
 
-            var root = new TableLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, AutoScrollMinSize = new Size(0, 700), ColumnCount = 1, RowCount = 7, Padding = new Padding(12) };
+            var root = new TableLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, AutoScrollMinSize = new Size(0, 700), ColumnCount = 1, RowCount = 8, Padding = new Padding(12) };
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
@@ -148,7 +151,7 @@ namespace ElevenLabsMusicGenerator
             baseNameTextBox.TextChanged += delegate { if (!changingBaseName) baseNameIsAutomatic = false; };
             root.Controls.Add(nameRow, 0, 3);
 
-            var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(0, 8, 0, 4) };
+            var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(0, 8, 0, 4), TabIndex = 4 };
             generateButton = NewButton("Generate", null, "Ctrl+Enter");
             generateButton.Click += delegate { StartGeneration(); };
             cancelButton = NewButton("&Cancel", "Cancel the current generation", "Esc");
@@ -162,15 +165,17 @@ namespace ElevenLabsMusicGenerator
             helpButton.Click += delegate { OpenManual(); };
             buttons.Controls.Add(generateButton);
             buttons.Controls.Add(cancelButton);
+            var playbackButtons = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.LeftToRight, TabIndex = 6 };
             var playButton = NewButton("Pla&y", null, "Alt+Y"); playButton.Click += delegate { PlaySelected(); };
             var stopButton = NewButton("Stop", null, "Esc"); stopButton.Click += delegate { playback.Stop(); };
-            buttons.Controls.Add(playButton); buttons.Controls.Add(stopButton);
-            buttons.Controls.Add(openOutputButton);
-            buttons.Controls.Add(preferencesButton);
-            buttons.Controls.Add(helpButton);
+            playbackButtons.Controls.Add(playButton); playbackButtons.Controls.Add(stopButton);
+            playbackButtons.Controls.Add(openOutputButton);
+            playbackButtons.Controls.Add(preferencesButton);
+            playbackButtons.Controls.Add(helpButton);
             root.Controls.Add(buttons, 0, 4);
+            root.Controls.Add(playbackButtons, 0, 6);
 
-            var statusPanel = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1, RowCount = 5 };
+            var statusPanel = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1, RowCount = 5, TabIndex = 7 };
             var balanceLabel = new Label { Text = "&Balance:", AutoSize = true, UseMnemonic = true };
             balanceTextBox = new TextBox { Dock = DockStyle.Top, ReadOnly = true, Multiline = true, ScrollBars = ScrollBars.Vertical,
                 Height = 70, TabStop = true, TabIndex = 0, Text = "Not checked. Press F5 to refresh your balance.",
@@ -183,9 +188,9 @@ namespace ElevenLabsMusicGenerator
             statusPanel.Controls.Add(statusLabel, 0, 2);
             statusPanel.Controls.Add(progressBar, 0, 3);
             statusPanel.Controls.Add(statusTextBox, 0, 4);
-            root.Controls.Add(statusPanel, 0, 5);
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
-            root.Controls.Add(outputs, 0, 6);
+            root.Controls.Add(statusPanel, 0, 7);
+            outputs.TabIndex = 5;
+            root.Controls.Add(outputs, 0, 5);
             outputs.KeyDown += (sender, args) => { if (args.KeyCode == Keys.Enter && args.Modifiers == Keys.None) { PlaySelected(); args.Handled = args.SuppressKeyPress = true; } };
 
             Controls.Add(root);
@@ -193,7 +198,7 @@ namespace ElevenLabsMusicGenerator
             promptCountStatus = new ToolStripStatusLabel { AccessibleName = "Prompt character count" };
             statusStrip.Items.Add(promptCountStatus);
             Controls.Add(statusStrip);
-            MainMenuStrip.BringToFront();
+            root.BringToFront();
             promptLabel.Click += delegate { promptTextBox.Focus(); };
             balanceLabel.Click += delegate { balanceTextBox.Focus(); };
             statusLabel.Click += delegate { statusTextBox.Focus(); };
@@ -259,6 +264,8 @@ namespace ElevenLabsMusicGenerator
             options.DropDownItems.Add(MenuCommand("&Stop Playback", delegate { playback.Stop(); }, Keys.None, "Esc"));
 
             var help = new ToolStripMenuItem("&Help");
+            soundtrackMenuItem = MenuCommand("&Video soundtrack...", delegate { OpenVideoSoundtrack(); }, Keys.Control | Keys.Shift | Keys.V, "Ctrl+Shift+V");
+            generate.DropDownItems.Add(soundtrackMenuItem);
             help.DropDownItems.Add(MenuCommand("Check for &Updates...", delegate { UpdateService.CheckForUpdates(this, settings, false); }, Keys.Shift | Keys.F1, "Shift+F1"));
             help.DropDownItems.Add(new ToolStripMenuItem("&Version History...", null, delegate { VersionHistory.Show(this); }));
             help.DropDownItems.Add(MenuCommand("Help for Focused &Control", delegate { ContextHelp.Show(this, OpenManual, HelpDescription); }, Keys.F1, "F1"));
@@ -279,6 +286,20 @@ namespace ElevenLabsMusicGenerator
             var item = new ToolStripMenuItem(label, null, action) { ShortcutKeyDisplayString = display, AccessibleDescription = display };
             if (shortcut != Keys.None) item.ShortcutKeys = shortcut;
             return item;
+        }
+
+        private void OpenVideoSoundtrack()
+        {
+            if (generationRunning) return;
+            playback.Stop();
+            using (var dialog = new VideoSoundtrackForm(settings))
+            {
+                dialog.ShowDialog(this);
+                foreach (var path in dialog.Completed) outputs.Items.Add(new AudioResult(path));
+                while (outputs.Items.Count > 200) outputs.Items.RemoveAt(0);
+                if (dialog.Completed.Count > 0) outputs.SelectedIndex = outputs.Items.Count - 1;
+            }
+            CheckBalance();
         }
 
         private async void StartGeneration()
@@ -482,6 +503,7 @@ namespace ElevenLabsMusicGenerator
 
         private void SetGenerationControls(bool running)
         {
+            soundtrackMenuItem.Enabled = !running;
             modelComboBox.Enabled = !running;
             generateButton.Enabled = !running;
             cancelButton.Enabled = running;

@@ -35,6 +35,9 @@ struct ElevenLabsMusicGeneratorApp: App {
                 Divider()
                 Button("Open Music Folder") { model.openOutputFolder() }
                     .keyboardShortcut("o", modifiers: [.command, .shift])
+                Button("Video Soundtrack...") { model.stopPlayback(); model.showVideoSoundtrack = true }
+                    .keyboardShortcut("v", modifiers: [.command, .shift])
+                    .disabled(model.isBusy)
             }
             CommandGroup(after: .appInfo) {
                 Button("Check for Updates...") { model.checkUpdates() }

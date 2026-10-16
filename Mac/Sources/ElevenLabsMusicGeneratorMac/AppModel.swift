@@ -33,6 +33,7 @@ final class AppModel: ObservableObject {
     @Published var isBusy = false
     @Published var showConfirmation = false
     @Published var showPlanEditor = false
+    @Published var showVideoSoundtrack = false
     @Published var notice: AppNotice?
     @Published var status: [String] = ["Ready."]
     @Published var balanceText = "Not checked yet. Press Command-R to refresh the balance."
@@ -324,6 +325,16 @@ final class AppModel: ObservableObject {
 
     func playSelected() { if let selectedOutput { play([selectedOutput]) } }
     func stopPlayback() { playback.stop() }
+    func acceptSoundtrack(_ urls: [URL]) {
+        completed.append(contentsOf: urls)
+        if completed.count > 200 { completed.removeFirst(completed.count - 200) }
+        selectedOutput = urls.first
+        addStatus("Video soundtrack complete. Saved \(urls.count) recordings.")
+        if preferences.autoPlayGenerations == true { play(urls) }
+        else if preferences.completionSound == true { NSSound.beep() }
+        if let app = NSApp { NSAccessibility.post(element: app.mainWindow ?? app, notification: .announcementRequested,
+            userInfo: [.announcement: "Soundtrack generation complete", .priority: NSAccessibilityPriorityLevel.high.rawValue]) }
+    }
     private func play(_ urls: [URL]) {
         playback.onError = { [weak self] message in self?.show(MusicError.response(message)) }
         playback.playSequence(urls, device: preferences.playbackDevice ?? "")

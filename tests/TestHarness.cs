@@ -18,6 +18,119 @@ namespace ElevenLabsMusicGenerator.Tests
     internal static class TestHarness
     {
         private static int passed;
+        private static void TestVideoSoundtrack()
+        {
+            var folder = Path.Combine(AppPaths.AppFolder, "Video tests"); Directory.CreateDirectory(folder);
+            try
+            {
+                var video = Path.Combine(folder, "input.mp4"); File.WriteAllBytes(video, new byte[] { 1, 2, 3, 4 });
+                var info = new FileInfo(video);
+                var input = new VideoSoundtrackRequest { OutputFolder = folder, Description = "Calm piano", Tags = "cinematic\r\nquiet", OutputFormat = "mp3_44100_192" };
+                input.Videos.Add(new SoundtrackVideo { Path = video, Bytes = info.Length, ModifiedUtc = info.LastWriteTimeUtc, Seconds = 4 });
+                input.Validate();
+                using (var server = new MockHttpServer(Encoding.ASCII.GetBytes("ID3test-audio"), "200 OK", "audio/mpeg"))
+                {
+                    var updates = new List<SoundtrackProgress>();
+                    var paths = new ElevenLabsMusicClient("test-key", server.ApiRoot).GenerateSoundtrack(input, CancellationToken.None, updates.Add);
+                    server.Wait();
+                    Assert(updates.Select(x => x.Stage).Distinct().SequenceEqual(new[] { SoundtrackStage.Preparing, SoundtrackStage.Uploading, SoundtrackStage.Waiting, SoundtrackStage.Downloading, SoundtrackStage.Saving }), "Soundtrack progress must reflect actual request stages in order.");
+                    Assert(updates.Last(x => x.Stage == SoundtrackStage.Uploading).Bytes == 4 && updates.Last(x => x.Stage == SoundtrackStage.Uploading).Percent == 100, "Upload progress must count the video bytes sent.");
+                    Assert(updates.Last(x => x.Stage == SoundtrackStage.Downloading).Bytes == Encoding.ASCII.GetByteCount("ID3test-audio") && updates.Last(x => x.Stage == SoundtrackStage.Downloading).Percent == 100, "Download progress must count the response bytes received.");
+                    Assert(paths.Length == 1 && File.ReadAllText(paths[0]) == "ID3test-audio", "Soundtrack response lost audio.");
+                    Assert(server.RequestText.Contains("/v1/music/video-to-music?output_format=mp3_44100_192") && server.RequestText.Contains("name=\"videos\"") && server.RequestText.Contains("name=\"model_id\"\r\n\r\nmusic_v2_5") && server.RequestText.Contains("name=\"tags\"\r\n\r\nquiet"), "Soundtrack multipart fields or endpoint are wrong.");
+                }
+                input.Videos[0].Seconds = 601;
+                bool rejected = false; try { input.Validate(); } catch (InvalidDataException) { rejected = true; }
+                Assert(rejected, "Overlong video was accepted."); input.Videos[0].Seconds = 4;
+                var zip = Path.Combine(folder, "stems.zip");
+                using (var archive = ZipFile.Open(zip, ZipArchiveMode.Create))
+                {
+                    foreach (var track in new[] { "music.mp3", "sfx.mp3" }) using (var writer = new StreamWriter(archive.CreateEntry(track).Open())) writer.Write("ID3test-audio");
+                }
+                var stems = Path.Combine(folder, "stems"); Directory.CreateDirectory(stems);
+                Assert(ElevenLabsMusicClient.SaveSoundtrackResponse(zip, stems, input.OutputFormat, true, CancellationToken.None).Length == 2, "Separate tracks were not saved.");
+                var unsafeZip = Path.Combine(folder, "unsafe.zip");
+                using (var archive = ZipFile.Open(unsafeZip, ZipArchiveMode.Create)) using (var writer = new StreamWriter(archive.CreateEntry("../escape.mp3").Open())) writer.Write("ID3test-audio");
+                rejected = false; try { ElevenLabsMusicClient.SaveSoundtrackResponse(unsafeZip, stems, input.OutputFormat, true, CancellationToken.None); } catch (InvalidDataException) { rejected = true; }
+                Assert(rejected && !File.Exists(Path.Combine(folder, "escape.mp3")), "Unsafe archive path was accepted.");
+                using (var cancelled = new CancellationTokenSource())
+                {
+                    cancelled.Cancel(); rejected = false;
+                    try { new ElevenLabsMusicClient("test-key", "http://127.0.0.1:1").GenerateSoundtrack(input, cancelled.Token, null); } catch (OperationCanceledException) { rejected = true; }
+                    Assert(rejected && Directory.GetDirectories(folder, "*.part").Length == 0, "Cancellation left soundtrack staging behind.");
+                }
+                using (var server = new MockHttpServer(Encoding.UTF8.GetBytes("{\"detail\":[{\"type\":\"missing\",\"msg\":\"A video is required\",\"input\":null}]}"), "422 Unprocessable Entity", "application/json"))
+                {
+                    rejected = false;
+                    try { new ElevenLabsMusicClient("test-key", server.ApiRoot).GenerateSoundtrack(input, CancellationToken.None, null); }
+                    catch (ElevenLabsApiException ex) { rejected = ex.Message.Contains("A video is required"); }
+                    server.Wait(); Assert(rejected && Directory.GetDirectories(folder, "*.part").Length == 0, "Validation errors must be readable and clean their staging.");
+                }
+                using (var source = new MemoryStream(new byte[5])) using (var destination = new MemoryStream())
+                {
+                    rejected = false; try { ElevenLabsMusicClient.CopyLimited(source, destination, 4, CancellationToken.None); } catch (InvalidDataException) { rejected = true; }
+                    Assert(rejected && destination.Length == 0, "Response limit did not stop oversized data.");
+                }
+                using (var form = new VideoSoundtrackForm(new AppSettings()))
+                {
+                    Assert(Descendants(form).OfType<Button>().Any(x => x.AccessibleName == "Check soundtrack progress"), "Soundtrack generation needs a focusable progress snapshot without interrupting the status log.");
+                    Assert(!form.ShowInTaskbar && Descendants(form).OfType<ComboBox>().All(x => x is PrefixComboBox), "Soundtrack dialog must be owned and support prefix navigation.");
+                    var shortcuts = Descendants(form).Where(x => x is Label || x is ButtonBase).Select(x => x.Text).Where(x => x.Contains("&")).Select(x => char.ToUpperInvariant(x[x.IndexOf('&') + 1]));
+                    Assert(shortcuts.GroupBy(x => x).All(x => x.Count() == 1), "Soundtrack mnemonics clash.");
+                    var add = Descendants(form).OfType<Button>().Single(x => x.Text == "Add &files...");
+                    Assert(ContextHelp.Description(add).Contains("does not upload") && string.IsNullOrEmpty(add.AccessibleDescription), "Soundtrack help must be specific without verbose live button text.");
+                    var editor = Descendants(form).OfType<TextBox>().Single(x => x.AccessibleName == "Soundtrack description");
+                    Assert(editor.Multiline && !editor.AcceptsTab && editor.MaxLength == 4100, "Soundtrack description must retain keyboard navigation and its limit.");
+                }
+            }
+            finally { Directory.Delete(folder, true); }
+        }
+        private static void TestSoundtrackProgress()
+        {
+            Assert(SoundtrackProgress.ElapsedText(TimeSpan.FromSeconds(65.9)) == "1 minute, 5 seconds" && SoundtrackProgress.ElapsedText(TimeSpan.FromSeconds(-1)) == "0 seconds", "Elapsed time must be readable and nonnegative.");
+            var waiting = new SoundtrackProgress(SoundtrackStage.Waiting);
+            Assert(waiting.Percent == null && waiting.Describe(TimeSpan.FromMinutes(5)).Contains("several minutes") && waiting.Describe(TimeSpan.FromMinutes(5)).Contains("5 minutes, 0 seconds"), "Waiting must explain long requests without inventing a percentage or ETA.");
+            Assert(new SoundtrackProgress(SoundtrackStage.Downloading, 5, -1).Percent == null && new SoundtrackProgress(SoundtrackStage.Uploading, long.MaxValue, 1).Percent == 100, "Only known transfer totals can expose a bounded percentage.");
+            using (var form = new VideoSoundtrackForm(new AppSettings()))
+            using (var cancellation = new CancellationTokenSource())
+            {
+                form.StartPosition = FormStartPosition.Manual; form.Location = new System.Drawing.Point(-2000, -2000); form.Show();
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                typeof(VideoSoundtrackForm).GetField("cancellation", flags).SetValue(form, cancellation);
+                var update = typeof(VideoSoundtrackForm).GetMethod("UpdateProgress", flags);
+                var status = Descendants(form).OfType<TextBox>().Single(x => x.AccessibleName == "Soundtrack status");
+                update.Invoke(form, new object[] { new SoundtrackProgress(SoundtrackStage.Uploading, 1, 10) });
+                status.Focus(); status.Select(3, 2);
+                update.Invoke(form, new object[] { new SoundtrackProgress(SoundtrackStage.Uploading, 9, 10) });
+                Assert(status.Focused && status.SelectionStart == 3 && status.SelectionLength == 2, "Transfer refresh must preserve the status reader's focus and selection.");
+                update.Invoke(form, new object[] { waiting }); status.Select(2, 1);
+                Exception dialogFailure = null;
+                using (var timer = new System.Windows.Forms.Timer { Interval = 50 })
+                {
+                    timer.Tick += delegate {
+                        timer.Stop();
+                        var dialog = form.OwnedForms.OfType<ApiKeyTestResultForm>().SingleOrDefault();
+                        try {
+                            Assert(dialog != null && !dialog.ShowInTaskbar, "Progress snapshot must be owned, not another taskbar window.");
+                            var text = Descendants(dialog).OfType<TextBox>().Single();
+                            var original = text.Text;
+                            Assert(text.Focused && text.ReadOnly && text.Multiline && original.Contains("Elapsed:"), "Progress snapshot must focus a navigable read-only edit.");
+                            update.Invoke(form, new object[] { new SoundtrackProgress(SoundtrackStage.Downloading, 2, 10) });
+                            Assert(text.Text == original && text.Focused, "Progress snapshot must not change underneath the reader.");
+                        } catch (Exception ex) { dialogFailure = ex; }
+                        finally { if (dialog != null) dialog.Close(); }
+                    };
+                    timer.Start(); typeof(VideoSoundtrackForm).GetMethod("ShowProgress", flags).Invoke(form, null);
+                }
+                if (dialogFailure != null) throw dialogFailure;
+                Assert(status.Focused, "Closing progress must restore the original focused control.");
+                cancellation.Cancel(); var previous = status.Text;
+                update.Invoke(form, new object[] { new SoundtrackProgress(SoundtrackStage.Saving) });
+                Assert(status.Text == previous, "Late progress must not overwrite cancellation status.");
+                typeof(VideoSoundtrackForm).GetField("cancellation", flags).SetValue(form, null);
+                form.Close();
+            }
+        }
         [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
         private static extern IntPtr SendMessage(IntPtr window, int message, IntPtr wParam, IntPtr lParam);
         private static void TestDropdownPrefixes()
@@ -48,7 +161,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 Assert(help.DropDownItems.OfType<ToolStripMenuItem>().Any(x => x.Text.Replace("&", "").Equals("Version history...", StringComparison.OrdinalIgnoreCase)), "Help must contain Version History.");
                 var accessKeys = help.DropDownItems.OfType<ToolStripMenuItem>().Where(x => x.Text.Contains("&")).Select(x => char.ToUpperInvariant(x.Text[x.Text.IndexOf('&') + 1]));
                 Assert(accessKeys.GroupBy(x => x).All(x => x.Count() == 1), "Help menu access keys must be distinct.");
-                Assert(VersionHistory.Text.StartsWith(Program.Version + Environment.NewLine + Environment.NewLine) && VersionHistory.Text.Contains(Environment.NewLine + Environment.NewLine + "1.4.3" + Environment.NewLine), "History must show this version before the previous release.");
+                Assert(VersionHistory.Text.StartsWith(Program.Version + Environment.NewLine + Environment.NewLine) && VersionHistory.Text.Contains(Environment.NewLine + Environment.NewLine + "1.4.4" + Environment.NewLine), "History must show this version before the previous release.");
                 Assert(!VersionHistory.Text.Contains("\\n") && !VersionHistory.Text.Replace("\r\n", "").Contains("\n"), "History must use native Windows line breaks.");
                 using (var dialog = VersionHistory.CreateDialog())
                 {
@@ -153,6 +266,12 @@ namespace ElevenLabsMusicGenerator.Tests
                 if (args.Length == 3 && args[0] == "--live-plan-compose-smoke") return RunLivePlanComposeSmoke(args[1], args[2]);
                 if (args.Length == 2 && args[0] == "--private-updater-smoke") return RunPrivateUpdaterSmoke(args[1]);
                 Run("All dropdowns support multi-letter navigation", TestDropdownPrefixes);
+                Run("Video soundtrack multipart, limits, stems and keyboard", TestVideoSoundtrack);
+                Run("Soundtrack progress is truthful, stable and accessible", TestSoundtrackProgress);
+                Run("Video soundtrack workflow is available", delegate {
+                    Assert(typeof(MainForm).Assembly.GetType("ElevenLabsMusicGenerator.VideoSoundtrackForm") != null,
+                        "Music must provide an owned Video Soundtrack workflow.");
+                });
                 Run("Version history is available from Help", TestVersionHistoryMenu);
                 Run("Startup separates updater options from documents", TestStartupArguments);
                 Run("Settings round trip", TestSettingsRoundTrip);
@@ -187,6 +306,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 Run("Numeric fields select current value", TestNumericFieldsSelectCurrentValue);
                 Run("Main window mnemonics", TestMainWindowMnemonics);
                 Run("Main window focus shortcuts", TestMainWindowFocusShortcuts);
+                Run("Generated audio stays beside playback controls", TestGeneratedAudioOrder);
                 Run("Plan editor keyboard and duration", TestPlanEditorKeyboardAndDuration);
                 Run("Plan editor displays and saves separate lines", TestPlanEditorLineEndings);
                 Run("Preferences own the output folder", TestPreferencesOwnOutputFolder);
@@ -1553,6 +1673,31 @@ namespace ElevenLabsMusicGenerator.Tests
                 var message = Message.Create(IntPtr.Zero, 0, IntPtr.Zero, IntPtr.Zero);
                 Assert((bool)method.Invoke(form, new object[] { message, Keys.Alt | Keys.S }) && status.Focused, "Alt+S did not focus the status log.");
                 Assert((bool)method.Invoke(form, new object[] { message, Keys.Alt | Keys.M }) && prompt.Focused, "Alt+M did not focus the music prompt.");
+                form.Close();
+            }
+        }
+
+        private static void TestGeneratedAudioOrder()
+        {
+            using (var form = new MainForm(null))
+            {
+                form.StartPosition = FormStartPosition.Manual;
+                form.Location = new System.Drawing.Point(-2000, -2000); form.Show();
+                var controls = Descendants(form).ToArray();
+                var outputs = controls.OfType<ListBox>().Single(x => x.AccessibleName == "Generated audio");
+                var prompt = controls.OfType<TextBox>().Single(x => x.AccessibleName == "Music prompt");
+                var status = controls.OfType<TextBox>().Single(x => x.AccessibleName == "Status log");
+                var play = controls.OfType<Button>().Single(x => x.Text == "Pla&y");
+                var stop = controls.OfType<Button>().Single(x => x.Text == "Stop");
+                outputs.Focus(); form.SelectNextControl(outputs, true, true, true, true);
+                Assert(play.Focused, "Tab from generated audio must reach Play, not the prompt or status log.");
+                form.SelectNextControl(play, true, true, true, true);
+                Assert(stop.Focused, "Stop must immediately follow Play.");
+                prompt.Focus(); form.SelectNextControl(prompt, false, true, true, true);
+                Assert(status.Focused, "Status log must remain one Shift+Tab before the prompt.");
+                var root = (TableLayoutPanel)outputs.Parent;
+                Assert(root.GetRow(outputs) + 1 == root.GetRow(play.Parent), "Playback controls must be directly below the generated audio list.");
+                Assert(root.Top >= form.MainMenuStrip.Bottom, "The menu must not cover the prompt heading or character counter.");
                 form.Close();
             }
         }

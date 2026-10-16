@@ -24,6 +24,7 @@ code { font-family: Consolas, monospace; }
 <li><a href="#first-run">First Run</a></li>
 <li><a href="#generating-music">Generating Music</a></li>
 <li><a href="#sound-effects">Generating Sound Effects</a></li>
+<li><a href="#video-soundtracks">Video Soundtracks</a></li>
 <li><a href="#composition-plans">Composition Plans And Lyrics</a></li>
 <li><a href="#results-and-credits">Results And Credit Usage</a></li>
 <li><a href="#prompt-drafts">Prompt Drafts</a></li>
@@ -35,6 +36,9 @@ code { font-family: Consolas, monospace; }
 </ul>
 
 <h2 id="changelog">Changelog</h2>
+<h3>1.5.0 - 16 October 2026</h3>
+<p>Added Video Soundtrack for video-led music and sound effects, with optional original-audio reference and separate recordings. Clear request stages, elapsed time and a readable Check progress snapshot help you follow longer requests.</p>
+<p>Generated audio is grouped with Play and Stop. Tab from the recordings list reaches Play, then Stop; Shift+Tab from the prompt reaches the status log.</p>
 <h3>1.4.4 - 11 October 2026</h3>
 <p>Dropdowns support multi-letter typing navigation throughout the main window, Preferences and composition-plan editor.</p>
 <h3>1.4.3 - 11 October 2026</h3>
@@ -94,6 +98,12 @@ code { font-family: Consolas, monospace; }
 <p><strong>Automatic duration</strong> lets the service choose the length. Turn it off to enter 0.5 to 30 seconds. <strong>Loop sound effect</strong> requests a seamless loop. <strong>Prompt influence</strong> ranges from 0 to 1; a higher value follows your wording more closely. Sound Effects supports the app's 44.1 kHz WAV and MP3 formats. Music-only options are unavailable in this mode; switching back restores the music controls.</p>
 <p>The live window title shows characters used and the active limit; the prompt counter also shows characters remaining. Typing or pasting stops at the active model's limit: 450 characters for Sound Effects, 4,100 for Music. If you switch from a longer Music prompt to Sound Effects, the full Music draft is kept separately and restored when you return to Music.</p>
 <p>Sound effects use the same output folder as music. Each batch saves one <code>.sfx.json</code> containing the prompt and its settings, without lyrics files. Choose <strong>Open Prompt or Plan</strong> to reuse this file; change the base filename for a new batch. Save Prompt still saves an ordinary text copy. Resuming an interrupted batch requires matching sound-effect settings and keeps completed audio. See the <a href="https://elevenlabs.io/docs/api-reference/text-to-sound-effects/convert">Sound Effects API reference</a> for service details.</p>
+
+<h2 id="video-soundtracks">Video Soundtracks</h2>
+<p>Choose <strong>Generate, Video soundtrack</strong> or press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd>. Add videos and use Move up or Move down to set their order. The combined input must fit within 10 files, 200 MB and 10 minutes. The app must be able to read each duration; MP4 is a suitable starting format.</p>
+<p>Optionally describe the desired score and enter style tags on separate lines. Add sound effects requests cues based on the video. Use original audio as reference asks the service to follow its musical character, rather than copying that audio. Separate tracks saves the returned music and effects individually. Choose a Music model and output format, then Generate and confirm the upload and credit use.</p>
+<p>The status distinguishes preparing, uploading, waiting for ElevenLabs, receiving audio and saving. Generation can take several minutes even for a short video. Elapsed time continues while you wait; it is not an estimate of time remaining. Choose <strong>Check progress</strong> or press <kbd>F5</kbd> for a read-only snapshot of the current stage, elapsed time and available transfer counts. This does not send another request. Transfer percentages describe only upload or download, never generation. The snapshot stays unchanged while you read it; close it and check again for a fresh reading.</p>
+<p>Completed audio is saved in a unique subfolder of your configured output folder, appears in the recordings list, and follows your playback preferences. The original videos are unchanged. This creates audio, not a new video file. Cancelling an accepted request may still cost credits. See the <a href="https://elevenlabs.io/docs/api-reference/music/video-to-music">Video to Music API guide</a> for current service limits.</p>
 
 <h2 id="composition-plans">Composition Plans And Lyrics</h2>
 <p>For Music v2 or v2.5, choose <strong>Use composition plan</strong>, then open <strong>Edit plan</strong> (<kbd>Alt</kbd>+<kbd>P</kbd>). A plan has ordered sections with a heading, duration, optional lyric lines or short musical directions, included and excluded styles, and context adherence. You can add, remove, or reorder sections. Durations can be entered to three decimal places and total no more than 10 minutes.</p>

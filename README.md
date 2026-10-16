@@ -8,6 +8,8 @@ You need an ElevenLabs account with access to the Music or Sound Effects API you
 
 Write a prompt, choose the model, format, duration and number of variations, then review the confirmation before spending credits. Music v2 and v2.5 also support editable composition plans with sections and lyrics. Generated audio, the shared prompt, and optional returned lyrics and details are saved in the chosen Music folder. An interrupted batch can resume missing variations without overwriting completed tracks.
 
+Video Soundtrack generates a score from videos in your chosen order, with optional sound-effect cues, original-audio reference and separate audio tracks. Open Generate, Video soundtrack on Windows (Ctrl+Shift+V), or File, Video Soundtrack on Mac (Command-Shift-V). The app validates the files and asks before uploading them; source videos are never changed. Completed soundtracks are saved in unique subfolders of your configured output folder. The result is audio, not an edited video.
+
 The balance field refreshes when the app opens and after generation. Alt+B focuses its read-only text; F5 refreshes it manually if credits change elsewhere. It reads the included subscription allowance and next reset without generating audio, and reports overage billing when available. It cannot determine the total spendable balance, a per-request charge, or a separate limit placed on an API key.
 
 The base filename keeps spaces you type. Clear it before generating Music to name each variation from the title returned by ElevenLabs. A small record in the output folder's `Lyrics` subfolder makes these titled batches resumable. Prompts show a mode-specific character counter and stop at the API limit.
@@ -24,7 +26,7 @@ Results open in a focused read-only dialog with a Close button so they can be re
 - Windows: download the Windows ZIP, extract it to a folder, and run `ElevenLabsMusicGenerator.exe`. By default, music is saved in a `Music` folder beside the app. Preferences and drafts stay with the portable app; the API key is protected for the current Windows account and computer.
 - Mac: download the Apple Silicon ZIP for an M-series Mac or the Intel ZIP for an Intel Mac, extract the app, and drag it to Applications. The first save uses `~/Music/ElevenLabs Music Generator`. The API key is stored in your Mac Keychain. Check for Updates downloads and verifies the matching signed Mac package, replaces the application and reopens it. Automatic startup checks can be changed in Settings.
 
-Do not share personal settings, prompts, music, drafts, or API-key files when sharing the application. The app sends your prompt or composition plan to ElevenLabs when you confirm generation.
+Do not share personal settings, prompts, music, drafts, or API-key files when sharing the application. The app sends your prompt or composition plan, or the videos selected for a soundtrack, to ElevenLabs only when you confirm generation.
 
 The [Windows manual](Manual.html) and [Mac manual](Mac/Manual.html) describe the controls, keyboard commands, file locations, recovery, and update behavior for each platform.
 

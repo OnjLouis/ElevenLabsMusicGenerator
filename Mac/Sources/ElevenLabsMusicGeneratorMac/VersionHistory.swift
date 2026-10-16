@@ -3,14 +3,15 @@ import AppKit
 @MainActor
 enum VersionHistory {
     static let text = """
+    1.5.0
+
+    Added Video Soundtrack: combine ordered videos, request music and sound effects, use original audio as a reference, and save a mixed soundtrack or separate tracks. Open it from File with Command-Shift-V.
+    Soundtrack progress shows upload, waiting and saving stages with elapsed time. Command-Shift-R opens a stable, readable progress snapshot; generation can take several minutes even for a short video.
+
     1.4.4
 
     Maintenance release. The Windows app gains multi-letter dropdown navigation; Mac controls are unchanged.
 
-    1.4.3
-
-    Version History is now available from the Help menu, including when offline.
-    The app opens with keyboard focus in the prompt editor.
     """
 
     static func make() -> (NSAlert, NSTextView) {

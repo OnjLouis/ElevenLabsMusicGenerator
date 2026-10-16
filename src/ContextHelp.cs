@@ -5,6 +5,11 @@ namespace ElevenLabsMusicGenerator
 {
     internal sealed class ContextHelp : IMessageFilter, IDisposable
     {
+        private sealed class ControlHelp { public string Text; }
+        internal static void SetInstructions(Control control, string text)
+        {
+            control.Tag = new ControlHelp { Text = text };
+        }
         private readonly Form main;
         private readonly Action manual;
         private readonly Func<Control, string> describe;
@@ -137,6 +142,8 @@ namespace ElevenLabsMusicGenerator
         }
         internal static string Description(Control control)
         {
+            var local = control.Tag as ControlHelp;
+            if (local != null) return local.Text;
             string text;
             if (Instructions.TryGetValue(ControlName(control), out text)) return text;
             for (var current = control; current != null && !(current is Form); current = current.Parent)
