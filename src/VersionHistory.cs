@@ -6,7 +6,11 @@ namespace ElevenLabsMusicGenerator
 {
     internal static class VersionHistory
     {
-        internal static readonly string Text = "1.5.0" + Environment.NewLine +
+        internal static readonly string Text = "1.5.1" + Environment.NewLine +
+            "" + Environment.NewLine +
+            "Sound Effects now uses ElevenLabs SFX v3 ahead of the v2 retirement on 1 February 2027. Saved sound-effects prompts and your selected mode continue to work, with duration, looping and prompt influence preserved. Music and Video Soundtrack are unchanged." + Environment.NewLine +
+            "" + Environment.NewLine +
+            "1.5.0" + Environment.NewLine +
             "" + Environment.NewLine +
             "Added Video Soundtrack: combine ordered videos, request music and sound effects, use original audio as a reference, and save a mixed soundtrack or separate tracks. Open it from Generate with Ctrl+Shift+V." + Environment.NewLine +
             "Soundtrack progress shows upload, waiting and saving stages with elapsed time. F5 opens a stable, readable progress snapshot; generation can take several minutes even for a short video." + Environment.NewLine +

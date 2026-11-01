@@ -1,18 +1,21 @@
 import Foundation
 
 enum MusicModel: String, CaseIterable, Identifiable {
-    case soundEffects = "eleven_text_to_sound_v2"
+    case soundEffects = "eleven_text_to_sound_v3"
     case v25 = "music_v2_5"
     case v2 = "music_v2"
     case v1 = "music_v1"
 
     var id: String { rawValue }
+    static func fromSavedValue(_ value: String) -> MusicModel? {
+        value == "eleven_text_to_sound_v2" ? .soundEffects : MusicModel(rawValue: value)
+    }
     var title: String {
         switch self {
         case .v1: "Music v1"
         case .v2: "Music v2"
         case .v25: "Music v2.5"
-        case .soundEffects: "Sound Effects v2"
+        case .soundEffects: "Sound Effects v3"
         }
     }
 }
@@ -226,7 +229,7 @@ struct GenerationRequest {
 
     static func readSoundEffect(_ data: Data) throws -> (prompt: String, effects: SoundEffectOptions, format: AudioFormat) {
         guard let saved = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              saved["model_id"] as? String == MusicModel.soundEffects.rawValue,
+              let modelID = saved["model_id"] as? String, MusicModel.fromSavedValue(modelID) == .soundEffects,
               let prompt = saved["text"] as? String,
               let loop = saved["loop"] as? Bool,
               let influence = saved["prompt_influence"] as? Double,

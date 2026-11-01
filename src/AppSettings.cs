@@ -156,6 +156,7 @@ namespace ElevenLabsMusicGenerator
         public static string NormalizeModel(string value)
         {
             var candidate = (value ?? string.Empty).Trim().ToLowerInvariant();
+            if (MusicGenerationRequest.IsSoundEffectsModel(candidate)) return MusicGenerationRequest.SoundEffectsModel;
             if (candidate == "music_v1" || candidate == "music_v2" || candidate == "music_v2_5" || candidate == MusicGenerationRequest.SoundEffectsModel) return candidate;
             return "music_v2_5";
         }

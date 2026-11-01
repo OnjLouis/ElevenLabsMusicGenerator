@@ -21,9 +21,10 @@ struct AppPreferences: Codable {
         set { soundEffects = newValue }
     }
 
-    static func load() -> AppPreferences {
-        guard let data = UserDefaults.standard.data(forKey: "preferences"),
-              let decoded = try? JSONDecoder().decode(AppPreferences.self, from: data) else { return AppPreferences() }
+    static func load(from defaults: UserDefaults = .standard) -> AppPreferences {
+        guard let data = defaults.data(forKey: "preferences"),
+              var decoded = try? JSONDecoder().decode(AppPreferences.self, from: data) else { return AppPreferences() }
+        decoded.model = (MusicModel.fromSavedValue(decoded.model) ?? .v25).rawValue
         return decoded
     }
 

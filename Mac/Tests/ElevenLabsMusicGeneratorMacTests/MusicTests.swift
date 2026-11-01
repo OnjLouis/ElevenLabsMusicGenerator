@@ -73,6 +73,7 @@ final class MusicTests: XCTestCase {
         var input = GenerationRequest(prompt: "A wooden door closing", baseName: "Door", outputFolder: URL(fileURLWithPath: "/tmp"), durationSeconds: 60, variations: 2, instrumental: true, model: .soundEffects, format: .wav, includeDetails: true, plan: nil)
         input.effects = SoundEffectOptions(duration: 0.5, automaticDuration: false, loop: true, promptInfluence: 0.7)
         try input.validate()
+        XCTAssertEqual(input.payload["model_id"] as? String, "eleven_text_to_sound_v3")
         XCTAssertEqual(input.endpoint, "/v1/sound-generation")
         XCTAssertEqual(input.payload["duration_seconds"] as? Double, 0.5)
         XCTAssertEqual(input.payload["loop"] as? Bool, true)
@@ -83,6 +84,15 @@ final class MusicTests: XCTestCase {
         XCTAssertEqual(saved.prompt, input.prompt)
         XCTAssertEqual(saved.effects.duration, 0.5)
         XCTAssertTrue(saved.effects.loop)
+        let oldData = Data(String(decoding: input.sourceData, as: UTF8.self).replacingOccurrences(of: "eleven_text_to_sound_v3", with: "eleven_text_to_sound_v2").utf8)
+        let oldSaved = try GenerationRequest.readSoundEffect(oldData)
+        XCTAssertEqual(oldSaved.prompt, input.prompt)
+        XCTAssertEqual(oldSaved.effects.duration, 0.5)
+        XCTAssertTrue(oldSaved.effects.loop)
+        XCTAssertEqual(oldSaved.effects.promptInfluence, 0.7)
+        XCTAssertEqual(oldSaved.format, .wav)
+        let unknownData = Data(String(decoding: oldData, as: UTF8.self).replacingOccurrences(of: "eleven_text_to_sound_v2", with: "eleven_text_to_sound_v99").utf8)
+        XCTAssertThrowsError(try GenerationRequest.readSoundEffect(unknownData))
         input.effects.automaticDuration = true
         XCTAssertNil(input.payload["duration_seconds"])
         XCTAssertTrue(try GenerationRequest.readSoundEffect(input.sourceData).effects.automaticDuration)
@@ -109,6 +119,15 @@ final class MusicTests: XCTestCase {
         let restored = try JSONDecoder().decode(AppPreferences.self, from: JSONEncoder().encode(prefs))
         XCTAssertTrue(restored.effects.loop)
         XCTAssertEqual(restored.durationSeconds, 90)
+        let oldEffects = old.replacingOccurrences(of: "music_v2_5", with: "eleven_text_to_sound_v2")
+        let suite = "sfx-model-test-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(Data(oldEffects.utf8), forKey: "preferences")
+        let migrated = AppPreferences.load(from: defaults)
+        XCTAssertEqual(migrated.model, "eleven_text_to_sound_v3")
+        XCTAssertEqual(migrated.durationSeconds, 90)
+        XCTAssertEqual(migrated.outputFolder, prefs.outputFolder)
     }
     func testMacReleaseCheckSelectsOnlyNewerPublishedMacPackage() throws {
         let json = """

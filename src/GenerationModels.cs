@@ -8,9 +8,11 @@ namespace ElevenLabsMusicGenerator
 {
     internal sealed class MusicGenerationRequest
     {
-        public const string SoundEffectsModel = "eleven_text_to_sound_v2";
+        public const string SoundEffectsModel = "eleven_text_to_sound_v3";
+        private const string PreviousSoundEffectsModel = "eleven_text_to_sound_v2";
+        public static bool IsSoundEffectsModel(string value) { return value == SoundEffectsModel || value == PreviousSoundEffectsModel; }
         public const int SoundEffectsPromptLimit = 450;
-        public bool IsSoundEffect { get { return ModelId == SoundEffectsModel; } }
+        public bool IsSoundEffect { get { return IsSoundEffectsModel(ModelId); } }
         public decimal SoundEffectSeconds { get; set; }
         public bool AutomaticDuration { get; set; }
         public bool Loop { get; set; }
@@ -56,7 +58,7 @@ namespace ElevenLabsMusicGenerator
         public string SourceText()
         {
             if (IsSoundEffect) return new System.Web.Script.Serialization.JavaScriptSerializer().Serialize(new Dictionary<string, object> {
-                { "model_id", ModelId }, { "text", Prompt.TrimEnd() }, { "duration_seconds", AutomaticDuration ? (object)null : SoundEffectSeconds },
+                { "model_id", SoundEffectsModel }, { "text", Prompt.TrimEnd() }, { "duration_seconds", AutomaticDuration ? (object)null : SoundEffectSeconds },
                 { "loop", Loop }, { "prompt_influence", PromptInfluence }, { "output_format", OutputFormat } });
             return Plan == null ? Prompt.TrimEnd() : Plan.ToJson();
         }
@@ -64,7 +66,7 @@ namespace ElevenLabsMusicGenerator
         public static MusicGenerationRequest ReadSoundEffect(string json)
         {
             var data = new System.Web.Script.Serialization.JavaScriptSerializer().Deserialize<Dictionary<string, object>>(json);
-            if (data == null || !data.ContainsKey("model_id") || Convert.ToString(data["model_id"]) != SoundEffectsModel)
+            if (data == null || !data.ContainsKey("model_id") || !IsSoundEffectsModel(Convert.ToString(data["model_id"])))
                 throw new InvalidDataException("This is not a saved sound effects prompt.");
             var result = new MusicGenerationRequest { ModelId = SoundEffectsModel, Prompt = Convert.ToString(data["text"]),
                 AutomaticDuration = data["duration_seconds"] == null, SoundEffectSeconds = data["duration_seconds"] == null ? 5 : Convert.ToDecimal(data["duration_seconds"]),

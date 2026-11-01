@@ -14,7 +14,7 @@ namespace ElevenLabsMusicGenerator
 {
     internal static class AppVersion
     {
-        public const string Short = "1.5.0";
+        public const string Short = "1.5.1";
         public const string Full = Short + ".0";
     }
 }

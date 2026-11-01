@@ -114,7 +114,7 @@ namespace ElevenLabsMusicGenerator
             generationOptions = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = true, Padding = new Padding(0, 8, 0, 4) };
             generationOptions.Controls.Add(new Label { Text = "Mo&del:", AutoSize = true, Anchor = AnchorStyles.Left });
             modelComboBox = new ShortcutComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160, AccessibleName = "Model", AccessibleDescription = "Choose music or sound effects.", ShortcutText = "Alt+D" };
-            modelComboBox.Items.AddRange(new object[] { "Sound Effects v2", "Music v2.5", "Music v2", "Music v1" });
+            modelComboBox.Items.AddRange(new object[] { "Sound Effects v3", "Music v2.5", "Music v2", "Music v1" });
             modelComboBox.SelectedIndex = Array.IndexOf(ModelIds, AppSettings.NormalizeModel(settings.ModelId));
             generationOptions.Controls.Add(modelComboBox);
             generationOptions.Controls.Add(new Label { Text = "&Length in seconds:", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 7, 3, 3) });

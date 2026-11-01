@@ -514,13 +514,13 @@ namespace ElevenLabsMusicGenerator.Tests
             {
                 var selector = Descendants(form).OfType<ComboBox>().FirstOrDefault(c => c.AccessibleName == "Model");
                 Assert(selector != null, "The main window needs a Model selector.");
-                Assert(selector.Items.Cast<string>().SequenceEqual(new[] { "Sound Effects v2", "Music v2.5", "Music v2", "Music v1" }), "Sound Effects must be first, followed by newest Music first.");
+                Assert(selector.Items.Cast<string>().SequenceEqual(new[] { "Sound Effects v3", "Music v2.5", "Music v2", "Music v1" }), "Sound Effects must be first, followed by newest Music first.");
                 Assert(Convert.ToString(selector.SelectedItem) == "Music v2.5", "Display order must not change the saved or default model.");
                 Assert(selector.AccessibilityObject.KeyboardShortcut == "Alt+D", "Model must expose Alt+D.");
                 var handle = selector.Handle;
                 Assert(selector.AccessibilityObject.Role == AccessibleRole.ComboBox, "Model must retain its native combo-box role.");
-                selector.SelectedItem = "Sound Effects v2";
-                Assert(selector.AccessibilityObject.Value == "Sound Effects v2", "Model must expose its selected value.");
+                selector.SelectedItem = "Sound Effects v3";
+                Assert(selector.AccessibilityObject.Value == "Sound Effects v3", "Model must expose its selected value.");
                 var saved = AppSettings.Load();
                 Assert(saved.ModelId == MusicGenerationRequest.SoundEffectsModel && saved.OutputFormat == "mp3_44100_192", "Effects selection and compatible format must be saved.");
                 Assert(saved.DefaultLengthSeconds == 120, "Changing model must preserve music duration.");
@@ -530,7 +530,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 Assert(!selector.Enabled, "Model must be disabled during generation.");
             }
             using (var prefs = new PreferencesForm(new AppSettings(), 0))
-                Assert(!Descendants(prefs).OfType<ComboBox>().Any(c => c.Items.Contains("Sound Effects v2")), "Preferences must not duplicate the model selector.");
+                Assert(!Descendants(prefs).OfType<ComboBox>().Any(c => c.Items.Contains("Sound Effects v3")), "Preferences must not duplicate the model selector.");
             new AppSettings().Save();
         }
 
@@ -630,11 +630,13 @@ namespace ElevenLabsMusicGenerator.Tests
 
         private static void TestSoundEffectsRequest()
         {
-            if (AppSettings.NormalizeModel("eleven_text_to_sound_v2") != "eleven_text_to_sound_v2")
+            if (AppSettings.NormalizeModel("eleven_text_to_sound_v2") != "eleven_text_to_sound_v3")
                 throw new Exception("Sound Effects must remain selected when settings are loaded.");
-            var request = new MusicGenerationRequest { ModelId = "eleven_text_to_sound_v2", Prompt = "A door closing", LengthSeconds = 3, SoundEffectSeconds = 3, OutputFormat = "pcm_44100", PromptInfluence = 0.3m };
+            Assert(MusicGenerationRequest.SoundEffectsModel == "eleven_text_to_sound_v3", "Effects must use the supported v3 model.");
+            var request = new MusicGenerationRequest { ModelId = MusicGenerationRequest.SoundEffectsModel, Prompt = "A door closing", LengthSeconds = 3, SoundEffectSeconds = 3, OutputFormat = "pcm_44100", PromptInfluence = 0.3m };
             var method = typeof(ElevenLabsMusicClient).GetMethod("BuildRequestBody", BindingFlags.Static | BindingFlags.NonPublic);
             var body = (string)method.Invoke(null, new object[] { request, 1 });
+            Assert(body.Contains("\"model_id\":\"eleven_text_to_sound_v3\""), "The API must receive v3 explicitly.");
             if (!body.Contains("\"text\":\"A door closing\"") || body.Contains("music_length_ms") || body.Contains("force_instrumental"))
                 throw new Exception("Sound effects must use their own API payload without music fields.");
             request.SoundEffectSeconds = 0.5m;
@@ -646,6 +648,13 @@ namespace ElevenLabsMusicGenerator.Tests
             Assert(!body.Contains("duration_seconds"), "Automatic duration must omit duration_seconds.");
             var reopened = MusicGenerationRequest.ReadSoundEffect(request.SourceText());
             Assert(reopened.Prompt == request.Prompt && reopened.AutomaticDuration && reopened.Loop && reopened.PromptInfluence == 0.3m, "Saved effects prompt did not restore settings.");
+            var oldPrompt = request.SourceText().Replace("eleven_text_to_sound_v3", "eleven_text_to_sound_v2");
+            reopened = MusicGenerationRequest.ReadSoundEffect(oldPrompt);
+            Assert(reopened.ModelId == "eleven_text_to_sound_v3" && reopened.Prompt == request.Prompt && reopened.AutomaticDuration && reopened.Loop && reopened.PromptInfluence == request.PromptInfluence && reopened.OutputFormat == request.OutputFormat, "A v2 prompt must reopen as v3 without losing its settings.");
+            var unsupported = false;
+            try { MusicGenerationRequest.ReadSoundEffect(oldPrompt.Replace("eleven_text_to_sound_v2", "eleven_text_to_sound_v99")); }
+            catch (InvalidDataException) { unsupported = true; }
+            Assert(unsupported, "Unknown effects models must not be silently accepted.");
             request.Prompt = new string('a', MusicGenerationRequest.SoundEffectsPromptLimit);
             method.Invoke(null, new object[] { request, 1 });
             MusicGenerationRequest.ReadSoundEffect(request.SourceText());
@@ -1189,7 +1198,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 Assert(result.Contains("Sound Effects API key accepted"), "The Sound Effects API key test did not succeed.");
                 Assert(server.RequestText.Contains("POST /v1/sound-generation "), "The key test did not use the Sound Effects endpoint.");
                 Assert(server.RequestText.Contains("\"duration_seconds\":0.5"), "The key test did not request the minimum duration.");
-                Assert(server.RequestText.Contains("\"model_id\":\"eleven_text_to_sound_v2\""), "The key test used the wrong model.");
+                Assert(server.RequestText.Contains("\"model_id\":\"eleven_text_to_sound_v3\""), "The key test used the wrong model.");
             }
             using (var server = new MockHttpServer(Encoding.UTF8.GetBytes("{}"), "200 OK", "application/json"))
             {

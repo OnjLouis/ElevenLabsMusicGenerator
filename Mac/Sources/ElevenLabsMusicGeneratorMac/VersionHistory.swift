@@ -3,6 +3,10 @@ import AppKit
 @MainActor
 enum VersionHistory {
     static let text = """
+    1.5.1
+
+    Sound Effects now uses ElevenLabs SFX v3 ahead of the v2 retirement on 1 February 2027. Saved sound-effects prompts and your selected mode continue to work, with duration, looping and prompt influence preserved. Music and Video Soundtrack are unchanged.
+
     1.5.0
 
     Added Video Soundtrack: combine ordered videos, request music and sound effects, use original audio as a reference, and save a mixed soundtrack or separate tracks. Open it from File with Command-Shift-V.

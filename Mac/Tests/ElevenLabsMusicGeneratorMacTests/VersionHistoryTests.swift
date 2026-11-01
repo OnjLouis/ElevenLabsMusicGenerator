@@ -5,7 +5,7 @@ import XCTest
 final class VersionHistoryTests: XCTestCase {
     @MainActor
     func testCurrentAndPreviousReleaseAreReadableOffline() {
-        XCTAssertTrue(VersionHistory.text.hasPrefix("1.5.0\n\n"))
+        XCTAssertTrue(VersionHistory.text.hasPrefix("1.5.1\n\n"))
         XCTAssertTrue(VersionHistory.text.contains("\n\n1.4.4\n\n"))
         XCTAssertFalse(VersionHistory.text.contains("\\n"))
         let (alert, editor) = VersionHistory.make()
