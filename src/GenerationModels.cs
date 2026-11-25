@@ -9,6 +9,7 @@ namespace ElevenLabsMusicGenerator
     internal sealed class MusicGenerationRequest
     {
         public const string SoundEffectsModel = "eleven_text_to_sound_v3";
+        internal const string NativeSfxWave48 = "wav_48000";
         private const string PreviousSoundEffectsModel = "eleven_text_to_sound_v2";
         public static bool IsSoundEffectsModel(string value) { return value == SoundEffectsModel || value == PreviousSoundEffectsModel; }
         public const int SoundEffectsPromptLimit = 450;
@@ -31,6 +32,21 @@ namespace ElevenLabsMusicGenerator
         public string OutputFolder { get; set; }
         public string BaseName { get; set; }
 
+        internal static bool SupportsFormat(bool effects, string format)
+        {
+            if (effects) return format == NativeSfxWave48 || format == "pcm_44100" || format == "mp3_44100_128" || format == "mp3_44100_192";
+            return format != NativeSfxWave48;
+        }
+
+        internal static string FormatError(bool effects, string format, bool loop)
+        {
+            if (!SupportsFormat(effects, format))
+                return effects ? "Choose WAV or a 44.1 kHz MP3 option for Sound Effects." : "48 kHz WAV is available only for Sound Effects.";
+            if (effects && loop && format == NativeSfxWave48)
+                return "48 kHz WAV is only available for non-looping sound effects. Turn off Loop or choose another format.";
+            return null;
+        }
+
         public string ConfirmationIntro(int pendingCount)
         {
             var kind = IsSoundEffect ? "sound effect" : "music track";
@@ -42,9 +58,9 @@ namespace ElevenLabsMusicGenerator
 
         public IList<string> OutputPaths()
         {
-            var extension = OutputFormat.StartsWith("pcm_", StringComparison.OrdinalIgnoreCase) ? ".wav" :
+            var extension = OutputFormat == NativeSfxWave48 || OutputFormat.StartsWith("pcm_", StringComparison.OrdinalIgnoreCase) ? ".wav" :
                 OutputFormat.StartsWith("mp3_", StringComparison.OrdinalIgnoreCase) ? ".mp3" : ".audio";
-            var stem = FileNameHelper.SafeStem(BaseName, Prompt);
+            var stem = OutputStem;
             return Enumerable.Range(1, Variations).Select(index =>
                 UseGeneratedTitle ? GeneratedTitleManifest.ResolvedOutputPath(this, index) :
                 Path.Combine(OutputFolder, stem + (Variations == 1 ? string.Empty : "_v" + index) + extension)).ToList();
@@ -52,7 +68,16 @@ namespace ElevenLabsMusicGenerator
 
         public string PromptPath()
         {
-            return Path.Combine(OutputFolder, FileNameHelper.SafeStem(BaseName, Prompt) + (IsSoundEffect ? ".sfx.json" : Plan == null ? ".txt" : ".plan.json"));
+            return Path.Combine(OutputFolder, OutputStem + (IsSoundEffect ? ".sfx.json" : Plan == null ? ".txt" : ".plan.json"));
+        }
+
+        private string OutputStem
+        {
+            get
+            {
+                var stem = FileNameHelper.SafeStem(BaseName, Prompt);
+                return OutputFormat == NativeSfxWave48 && !stem.EndsWith("_48k", StringComparison.OrdinalIgnoreCase) ? stem + "_48k" : stem;
+            }
         }
 
         public string SourceText()
@@ -72,7 +97,7 @@ namespace ElevenLabsMusicGenerator
                 AutomaticDuration = data["duration_seconds"] == null, SoundEffectSeconds = data["duration_seconds"] == null ? 5 : Convert.ToDecimal(data["duration_seconds"]),
                 Loop = Convert.ToBoolean(data["loop"]), PromptInfluence = Convert.ToDecimal(data["prompt_influence"]), OutputFormat = Convert.ToString(data["output_format"]) };
             if (string.IsNullOrWhiteSpace(result.Prompt) || result.Prompt.Length > SoundEffectsPromptLimit || result.SoundEffectSeconds < 0.5m || result.SoundEffectSeconds > 30 || result.PromptInfluence < 0 || result.PromptInfluence > 1 ||
-                (result.OutputFormat != "pcm_44100" && result.OutputFormat != "mp3_44100_128" && result.OutputFormat != "mp3_44100_192"))
+                FormatError(true, result.OutputFormat, result.Loop) != null)
                 throw new InvalidDataException("The saved sound effects settings are invalid.");
             return result;
         }
@@ -117,5 +142,6 @@ namespace ElevenLabsMusicGenerator
         public string DetailsPath { get; set; }
         public string LyricsPath { get; set; }
         public TimeSpan Elapsed { get; set; }
+        public decimal? ReportedCredits { get; set; }
     }
 }

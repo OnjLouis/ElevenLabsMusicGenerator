@@ -160,7 +160,8 @@ namespace ElevenLabsMusicGenerator
             var selected = Convert.ToString(formatComboBox.SelectedItem);
             formatComboBox.Items.Clear();
             formatComboBox.Items.AddRange(new object[] { "PCM 44.1 kHz WAV", "MP3 44.1 kHz, 192 kbps", "MP3 44.1 kHz, 128 kbps" });
-            if (!effects) formatComboBox.Items.AddRange(new object[] { "MP3 48 kHz, 192 kbps", "MP3 48 kHz, 240 kbps", "MP3 48 kHz, 320 kbps" });
+            if (effects) formatComboBox.Items.Insert(1, NativeWaveLabel);
+            else formatComboBox.Items.AddRange(new object[] { "MP3 48 kHz, 192 kbps", "MP3 48 kHz, 240 kbps", "MP3 48 kHz, 320 kbps" });
             formatComboBox.SelectedItem = formatComboBox.Items.Contains(selected) ? selected : "MP3 44.1 kHz, 192 kbps";
         }
 
@@ -343,8 +344,10 @@ namespace ElevenLabsMusicGenerator
             return combo;
         }
 
+        private const string NativeWaveLabel = "WAV 48 kHz (non-looping effects)";
         private static string FormatDisplay(string value)
         {
+            if (value == MusicGenerationRequest.NativeSfxWave48) return NativeWaveLabel;
             if (value == "mp3_44100_192") return "MP3 44.1 kHz, 192 kbps";
             if (value == "mp3_44100_128") return "MP3 44.1 kHz, 128 kbps";
             if (value == "mp3_48000_192") return "MP3 48 kHz, 192 kbps";
@@ -355,6 +358,7 @@ namespace ElevenLabsMusicGenerator
 
         private static string StoredFormat(string value)
         {
+            if (value == NativeWaveLabel) return MusicGenerationRequest.NativeSfxWave48;
             if (value != null && value.Contains("48 kHz"))
             {
                 if (value.Contains("320")) return "mp3_48000_320";

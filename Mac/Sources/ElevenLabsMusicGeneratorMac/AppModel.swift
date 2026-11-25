@@ -350,16 +350,19 @@ final class AppModel: ObservableObject {
             defer { isBusy = false; generationTask = nil; pendingRequest = nil; pendingIndices = []; checkBalance() }
             do {
                 guard let key = try KeychainStore.read(), !key.isEmpty else { throw MusicError.validation("Add an API key in Settings first.") }
+                var reportedCredits: [Decimal?] = []
                 for index in indices {
                     try Task.checkCancellation()
                     addStatus("Generating variation \(index) of \(request.variations).")
                     let result = try await service.generate(request, index: index, key: key)
+                    reportedCredits.append(result.reportedCredits)
                     completed.append(result.url)
                     selectedOutput = result.url
                     addStatus("Saved \(result.url.lastPathComponent). Generation time: \(String(format: "%.1f", result.seconds)) seconds.")
                 }
                 let summary = "Generation complete. \(completed.count) new track(s) saved to \(request.outputFolder.path)."
                 addStatus(summary)
+                if let credits = RunCreditUsage.completionLine(reportedCredits) { addStatus(credits) }
                 if preferences.completionSound == true && preferences.autoPlayGenerations != true { NSSound.beep() }
                 if let app = NSApp { NSAccessibility.post(element: app.mainWindow ?? app, notification: .announcementRequested, userInfo: [.announcement: "Generation complete", .priority: NSAccessibilityPriorityLevel.high.rawValue]) }
                 if preferences.autoPlayGenerations == true { play(completed) }

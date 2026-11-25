@@ -44,6 +44,7 @@ namespace ElevenLabsMusicGenerator
 
         private static bool MatchesCompletedAudio(string path, MusicGenerationRequest request)
         {
+            if (request.OutputFormat == MusicGenerationRequest.NativeSfxWave48) return WaveFileWriter.IsSoundEffectWave48(path);
             if (request.OutputFormat.StartsWith("pcm_", StringComparison.OrdinalIgnoreCase))
             {
                 var parts = request.OutputFormat.Split('_');

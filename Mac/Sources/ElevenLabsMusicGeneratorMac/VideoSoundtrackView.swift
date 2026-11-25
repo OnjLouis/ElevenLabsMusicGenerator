@@ -158,7 +158,7 @@ struct VideoSoundtrackView: View {
                     ForEach(MusicModel.allCases.filter { $0 != .soundEffects }) { item in Text(item.title).tag(item) }
                 }.accessibilityHint("Music model for the soundtrack. Music v2.5 is selected initially.")
                 Picker("Output format", selection: $editor.request.format) {
-                    ForEach(AudioFormat.allCases) { item in Text(item.title).tag(item) }
+                    ForEach(AudioFormat.allCases.filter { $0.supports(soundEffects: false) }) { item in Text(item.title).tag(item) }
                 }.accessibilityHint("Choose the audio format. PCM is saved as stereo WAV. Subscription restrictions can apply.")
             }.disabled(editor.busy)
             KeyboardTextView(text: .constant(editor.status), editable: false,

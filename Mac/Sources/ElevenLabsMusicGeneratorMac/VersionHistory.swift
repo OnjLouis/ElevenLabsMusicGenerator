@@ -3,6 +3,10 @@ import AppKit
 @MainActor
 enum VersionHistory {
     static let text = """
+    1.5.2
+
+    Added native 48 kHz WAV for non-looping Sound Effects. Existing music and sound-effect formats are unchanged. Credit Balance shows the percentage remaining and lists active overage billing and any reported charge after the reset. Status log shows the reported credits used for a sound-effect run. The Mac updater validates its working folders and preserves the previous app if rollback cannot safely finish.
+
     1.5.1
 
     Sound Effects now uses ElevenLabs SFX v3 ahead of the v2 retirement on 1 February 2027. Saved sound-effects prompts and your selected mode continue to work, with duration, looping and prompt influence preserved. Music and Video Soundtrack are unchanged.

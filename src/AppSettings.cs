@@ -148,7 +148,7 @@ namespace ElevenLabsMusicGenerator
         public static string NormalizeOutputFormat(string value)
         {
             var candidate = (value ?? string.Empty).Trim().ToLowerInvariant();
-            if (candidate == "mp3_44100_192" || candidate == "mp3_44100_128" || candidate == "pcm_44100" ||
+            if (candidate == MusicGenerationRequest.NativeSfxWave48 || candidate == "mp3_44100_192" || candidate == "mp3_44100_128" || candidate == "pcm_44100" ||
                 candidate == "mp3_48000_192" || candidate == "mp3_48000_240" || candidate == "mp3_48000_320") return candidate;
             return "pcm_44100";
         }

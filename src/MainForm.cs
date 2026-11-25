@@ -372,7 +372,9 @@ namespace ElevenLabsMusicGenerator
                         completed.Add(client.GenerateOne(request, outputPaths[index - 1], index, generationCancellation.Token, progress));
                     }
                 });
-                SetStatus("Generation complete. Saved " + completed.Count + " new track" + (completed.Count == 1 ? "" : "s") + "; kept " + plan.ExistingCount + " existing." + RunStatistics(completed, elapsed.Elapsed));
+                var credits = RunCreditUsage.CompletionLine(completed.Select(item => item.ReportedCredits));
+                SetStatus("Generation complete. Saved " + completed.Count + " new track" + (completed.Count == 1 ? "" : "s") + "; kept " + plan.ExistingCount + " existing." +
+                    (credits == null ? "" : Environment.NewLine + credits) + RunStatistics(completed, elapsed.Elapsed));
                 if (settings.AutoPlayGenerations) playback.PlaySequence(completed.Select(item => item.OutputPath), settings.PlaybackDevice);
                 if (settings.CompletionSound && !settings.AutoPlayGenerations) System.Media.SystemSounds.Asterisk.Play();
             }
@@ -420,10 +422,10 @@ namespace ElevenLabsMusicGenerator
                 promptTextBox.Focus();
                 return null;
             }
-            if (isSoundEffect && settings.OutputFormat.StartsWith("mp3_48000", StringComparison.Ordinal))
+            var formatError = MusicGenerationRequest.FormatError(isSoundEffect, settings.OutputFormat, loopCheckBox.Checked);
+            if (formatError != null)
             {
-                MessageBox.Show(this, "Sound Effects supports the 44.1 kHz WAV and MP3 options. Choose one in Preferences.", Program.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
-                ShowPreferences(3);
+                MessageBox.Show(this, formatError, Program.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return null;
             }
             if (prompt.Length == 0 && !usePlan)
@@ -639,6 +641,7 @@ namespace ElevenLabsMusicGenerator
                     settings.ModelId == MusicGenerationRequest.SoundEffectsModel && text.Length > MusicGenerationRequest.SoundEffectsPromptLimit)
                 {
                     settings.ModelId = "music_v2_5";
+                    if (settings.OutputFormat == MusicGenerationRequest.NativeSfxWave48) settings.OutputFormat = "pcm_44100";
                     SetGenerationMode();
                     settings.Save();
                 }
@@ -861,13 +864,15 @@ namespace ElevenLabsMusicGenerator
             if (settings.ModelId == MusicGenerationRequest.SoundEffectsModel) soundEffectPrompt = promptTextBox.Text;
             else longMusicPrompt = promptTextBox.Text;
             settings.ModelId = ModelIds[modelComboBox.SelectedIndex];
-            var formatChanged = settings.ModelId == MusicGenerationRequest.SoundEffectsModel && settings.OutputFormat.StartsWith("mp3_48000", StringComparison.Ordinal);
-            if (formatChanged) settings.OutputFormat = "mp3_44100_192";
+            var effects = MusicGenerationRequest.IsSoundEffectsModel(settings.ModelId);
+            var formatChanged = !MusicGenerationRequest.SupportsFormat(effects, settings.OutputFormat);
+            if (formatChanged) settings.OutputFormat = effects ? "mp3_44100_192" : "pcm_44100";
             SetGenerationMode();
             try
             {
                 settings.Save();
-                SetStatus(modelComboBox.Text + " selected." + (formatChanged ? " Output changed to MP3 44.1 kHz, 192 kbps." : string.Empty));
+                var formatNotice = effects ? " Output changed to MP3 44.1 kHz, 192 kbps." : " Output changed to WAV 44.1 kHz.";
+                SetStatus(modelComboBox.Text + " selected." + (formatChanged ? formatNotice : string.Empty));
             }
             catch (Exception ex)
             {

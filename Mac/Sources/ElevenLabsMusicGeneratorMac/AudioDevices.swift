@@ -34,7 +34,7 @@ struct AudioSettingsView: View {
                 ForEach(devices) { Text($0.name).tag($0.id) }
             }.accessibilityHint("Choose the output for this app's audio playback.")
             Picker("Default Output Format", selection: $model.preferences.format) {
-                ForEach(AudioFormat.allCases.filter { !model.isSoundEffect || !$0.rawValue.hasPrefix("mp3_48000") }) { Text($0.title).tag($0.rawValue) }
+                ForEach(AudioFormat.allCases.filter { $0.supports(soundEffects: model.isSoundEffect) }) { Text($0.title).tag($0.rawValue) }
             }.accessibilityHint("Choose the format for generated audio. The main window can change it too.")
             Toggle("Play new generations automatically in sequence", isOn: Binding(get: { model.preferences.autoPlayGenerations == true }, set: { model.stopPlayback(); model.preferences.autoPlayGenerations = $0 }))
                 .accessibilityHint("Off by default. Play only the new audio from a successfully completed batch, one file at a time. Stop ends the queue.")

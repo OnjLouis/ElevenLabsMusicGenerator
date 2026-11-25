@@ -6,7 +6,9 @@ namespace ElevenLabsMusicGenerator
 {
     internal static class VersionHistory
     {
-        internal static readonly string Text = "1.5.1" + Environment.NewLine +
+        internal static readonly string Text = AppVersion.Short + Environment.NewLine + Environment.NewLine +
+            "Added native 48 kHz WAV for non-looping Sound Effects. Existing music and sound-effect formats are unchanged. Credit Balance shows the percentage remaining and lists active overage billing and any reported charge after the reset. Status log shows the reported credits used for a sound-effect run." + Environment.NewLine + Environment.NewLine +
+            "1.5.1" + Environment.NewLine +
             "" + Environment.NewLine +
             "Sound Effects now uses ElevenLabs SFX v3 ahead of the v2 retirement on 1 February 2027. Saved sound-effects prompts and your selected mode continue to work, with duration, looping and prompt influence preserved. Music and Video Soundtrack are unchanged." + Environment.NewLine +
             "" + Environment.NewLine +

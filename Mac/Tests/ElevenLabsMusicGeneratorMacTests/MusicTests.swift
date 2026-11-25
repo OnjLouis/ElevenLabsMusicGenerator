@@ -69,6 +69,21 @@ final class MusicTests: XCTestCase {
         request.model = .v25
         XCTAssertEqual(request.confirmationIntro(pendingCount: 3), "Generate 3 music tracks?\nDuration: 60 seconds each.")
     }
+    func testRunCreditUsage() {
+        let five = RunCreditUsage.parse("5")
+        let seven = RunCreditUsage.parse("7")
+        XCTAssertEqual(five, 5)
+        XCTAssertEqual(seven, 7)
+        XCTAssertEqual(RunCreditUsage.parse("1.25"), Decimal(string: "1.25", locale: Locale(identifier: "en_US_POSIX")))
+        XCTAssertEqual(RunCreditUsage.parse("0"), 0)
+        for value in [nil, "", "-2", "1,2", "4.2x", "4e2", "1.", "2\r\n1"] as [String?] {
+            XCTAssertNil(RunCreditUsage.parse(value))
+        }
+        XCTAssertEqual(RunCreditUsage.completionLine([five, seven]), "Credits used this run: 12.")
+        XCTAssertNil(RunCreditUsage.completionLine([five, nil]))
+        XCTAssertNil(RunCreditUsage.completionLine([]))
+    }
+
     func testSoundEffectsPayloadAndSavedPrompt() throws {
         var input = GenerationRequest(prompt: "A wooden door closing", baseName: "Door", outputFolder: URL(fileURLWithPath: "/tmp"), durationSeconds: 60, variations: 2, instrumental: true, model: .soundEffects, format: .wav, includeDetails: true, plan: nil)
         input.effects = SoundEffectOptions(duration: 0.5, automaticDuration: false, loop: true, promptInfluence: 0.7)
@@ -371,6 +386,34 @@ final class MusicTests: XCTestCase {
         XCTAssertTrue(restricted.contains("user_read"))
     }
 
+    func testBalancePercentageAndOverage() throws {
+        do {
+            let text = try SubscriptionBalance.decode(Data(#"{"character_count":37,"character_limit":100,"max_credit_limit_extension":0}"#.utf8)).display()
+            XCTAssertTrue(text.contains("(63%)") && !text.contains("Overage billing:"))
+        }
+        do {
+            let text = try SubscriptionBalance.decode(Data(#"{"character_count":37,"character_limit":100,"max_credit_limit_extension":25,"can_extend_character_limit":false,"current_overage":{"amount":"0.00","currency":"usd"}}"#.utf8)).display()
+            XCTAssertTrue(text.contains("Next reset: unavailable.\nOverage billing: on.") && !text.contains("Current overage charge"))
+        }
+        do {
+            let text = try SubscriptionBalance.decode(Data(#"{"character_count":0,"character_limit":0,"can_extend_character_limit":true}"#.utf8)).display()
+            XCTAssertTrue(!text.contains("%") && !text.contains("Overage billing:"))
+        }
+        do {
+            let text = try SubscriptionBalance.decode(Data(#"{"character_count":1,"character_limit":100000,"max_credit_limit_extension":"unlimited","current_overage":{"amount":"39.11","currency":"usd"}}"#.utf8)).display()
+            XCTAssertTrue(text.contains("(99%)") && text.contains("Overage billing: on.") && text.contains("Current overage charge: USD "))
+        }
+        do {
+            let text = try SubscriptionBalance.decode(Data(#"{"character_count":101,"character_limit":100,"max_credit_limit_extension":"invalid","current_overage":{"amount":"39.11"}}"#.utf8)).display()
+            XCTAssertTrue(text.contains("(0%)") && text.contains("exceeded by") && !text.contains("Overage billing:") && !text.contains("Current overage charge"))
+        }
+        do {
+            let text = try SubscriptionBalance.decode(Data(#"{"character_count":20,"character_limit":100,"max_credit_limit_extension":0,"current_overage":{"amount":"1.25","currency":"usd"}}"#.utf8)).display()
+            XCTAssertFalse(text.contains("Overage billing:"))
+            XCTAssertTrue(text.contains("Next reset: unavailable.\nCurrent overage charge: USD "))
+        }
+    }
+
     func testSubscriptionBalanceRequestAndFormatting() async throws {
         defer { StubProtocol.reply = nil }
         StubProtocol.reply = { request in
@@ -389,7 +432,7 @@ final class MusicTests: XCTestCase {
         let overage = try SubscriptionBalance.decode(Data(#"{"character_count":244469,"character_limit":114089,"can_extend_character_limit":true,"max_credit_limit_extension":"unlimited","current_overage":{"amount":"39.11","currency":"usd"}}"#.utf8)).display()
         XCTAssertTrue(overage.contains("130,380"))
         XCTAssertTrue(overage.contains("USD 39.11"))
-        XCTAssertTrue(overage.contains("Usage-based billing is enabled"))
+        XCTAssertTrue(overage.contains("Overage billing: on."))
         XCTAssertTrue(overage.contains("total spendable balance is not available"))
         XCTAssertTrue(try SubscriptionBalance.decode(Data(#"{"character_count":0,"character_limit":10}"#.utf8)).display().contains("unavailable"))
         XCTAssertThrowsError(try SubscriptionBalance.decode(Data(#"{"character_count":4}"#.utf8)))
@@ -483,6 +526,43 @@ final class MusicTests: XCTestCase {
         XCTAssertEqual(String(data: result[0..<4], encoding: .ascii), "RIFF")
     }
 
+    func testNativeSfx48RemainsAnUnmodifiedWave() async throws {
+        let fm = FileManager.default
+        let folder = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: folder); StubProtocol.reply = nil }
+        let raw = folder.appendingPathComponent("raw")
+        let wave = folder.appendingPathComponent("fixture.wav")
+        try Data(repeating: 0, count: 48_000).write(to: raw)
+        try WaveWriter.wrap(input: raw, output: wave, sampleRate: 48_000)
+        let bytes = try Data(contentsOf: wave)
+        let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [StubProtocol.self]
+        let service = MusicService(session: URLSession(configuration: configuration))
+        var request = GenerationRequest(prompt: "A knock", baseName: "Knock", outputFolder: folder,
+            durationSeconds: 10, variations: 1, instrumental: false, model: .soundEffects,
+            format: .wav, includeDetails: false, plan: nil)
+        let old = request.outputURL(1)
+        try Data("Unrelated 44.1 kHz file".utf8).write(to: old)
+        request.format = .wav48
+        StubProtocol.reply = { urlRequest in
+            XCTAssertEqual(urlRequest.url?.path, "/v1/sound-generation")
+            XCTAssertEqual(urlRequest.url?.query, "output_format=wav_48000")
+            return (HTTPURLResponse(url: urlRequest.url!, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "audio/wav"])!, bytes)
+        }
+        let result = try await service.generate(request, index: 1, key: "fake-key")
+        XCTAssertEqual(result.url.lastPathComponent, "Knock_48k.wav")
+        XCTAssertEqual(try Data(contentsOf: result.url), bytes)
+        XCTAssertEqual(try String(contentsOf: old, encoding: .utf8), "Unrelated 44.1 kHz file")
+        XCTAssertEqual(try BatchPlanner.pending(request), [])
+        XCTAssertEqual(try GenerationRequest.readSoundEffect(request.sourceData).format, .wav48)
+        request.baseName = "Knock_48k"
+        XCTAssertEqual(request.outputURL(1), result.url)
+        request.effects.loop = true
+        XCTAssertThrowsError(try request.validate())
+        request.model = .v25
+        XCTAssertThrowsError(try request.validate())
+    }
+
     func testGenerationWritesAudioAndLyricsWithoutTempFiles() async throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -569,7 +649,7 @@ final class MusicTests: XCTestCase {
             XCTAssertNil(body["music_length_ms"])
             XCTAssertNil(body["duration_seconds"])
             return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil,
-                headerFields: ["Content-Type": "audio/pcm"])!, Data(repeating: 0, count: 44100 * 4))
+                headerFields: ["Content-Type": "audio/pcm", "Character-Cost": "5"])!, Data(repeating: 0, count: 44100 * 4))
         }
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [StubProtocol.self]
@@ -579,6 +659,7 @@ final class MusicTests: XCTestCase {
             format: .wav, includeDetails: true, plan: nil)
         let result = try await service.generate(request, index: 1, key: "fake-key")
         XCTAssertEqual(try Data(contentsOf: result.url).count, 44100 * 4 + 44)
+        XCTAssertEqual(result.reportedCredits, 5)
         XCTAssertNil(result.lyricsURL)
         XCTAssertNil(result.detailsURL)
         XCTAssertTrue(try String(contentsOf: request.promptURL).contains("\n"))

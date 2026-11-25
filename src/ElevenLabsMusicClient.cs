@@ -241,6 +241,8 @@ namespace ElevenLabsMusicGenerator
                             WaveFileWriter.WrapPcmFile(pcmPartPath, audioPartPath, PcmSampleRate(requestData.OutputFormat));
                             DeleteIfExists(pcmPartPath);
                         }
+                        else if (requestData.OutputFormat == MusicGenerationRequest.NativeSfxWave48 && !WaveFileWriter.IsSoundEffectWave48(audioPartPath))
+                            throw new InvalidDataException("ElevenLabs did not return a valid 48 kHz WAV file.");
 
                         if (requestData.UseGeneratedTitle)
                         {
@@ -286,7 +288,8 @@ namespace ElevenLabsMusicGenerator
                         AppLog.Write("Generated " + Path.GetFileName(outputPath) + "; variation=" + variationIndex + "; bytes=" + received + "; format=" + requestData.OutputFormat + "; model=" + requestData.ModelId + "; elapsed=" + stopwatch.Elapsed.TotalSeconds.ToString("0.0") + "s.");
                         Report(progress, requestData, variationIndex, outputPath, received, variationIndex == 1 ? "Saved generated audio and shared prompt." : "Saved generated audio.");
                         return new GenerationResult { OutputPath = outputPath, PromptPath = promptPath, AudioBytes = received, SongId = songId,
-                            DetailsPath = details == null || !requestData.IncludeDetails ? null : detailsPath, LyricsPath = hasLyrics ? lyricsPath : null, Elapsed = stopwatch.Elapsed };
+                            DetailsPath = details == null || !requestData.IncludeDetails ? null : detailsPath, LyricsPath = hasLyrics ? lyricsPath : null, Elapsed = stopwatch.Elapsed,
+                            ReportedCredits = requestData.IsSoundEffect ? RunCreditUsage.Parse(response.Headers["character-cost"]) : null };
                     }
                 }
             }
@@ -321,6 +324,8 @@ namespace ElevenLabsMusicGenerator
 
         private static string BuildRequestBody(MusicGenerationRequest requestData, int variationIndex)
         {
+            var formatError = MusicGenerationRequest.FormatError(requestData.IsSoundEffect, requestData.OutputFormat, requestData.Loop);
+            if (formatError != null) throw new ArgumentException(formatError);
             var values = new Dictionary<string, object>();
             if (requestData.IsSoundEffect)
             {

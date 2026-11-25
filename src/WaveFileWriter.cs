@@ -9,6 +9,18 @@ namespace ElevenLabsMusicGenerator
         public const int Channels = 2;
         public const int BitsPerSample = 16;
 
+        internal static bool IsSoundEffectWave48(string path)
+        {
+            try
+            {
+                using (var reader = new NAudio.Wave.WaveFileReader(path))
+                    return reader.Length > 0 && reader.WaveFormat.SampleRate == 48000;
+            }
+            catch (IOException) { return false; }
+            catch (FormatException) { return false; }
+            catch (ArgumentException) { return false; }
+        }
+
         public static void WrapPcmFile(string sourcePath, string destinationPath, int sampleRate)
         {
             var dataLength = new FileInfo(sourcePath).Length;

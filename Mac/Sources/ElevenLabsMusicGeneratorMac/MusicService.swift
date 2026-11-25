@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 
 struct MusicService {
@@ -64,7 +65,7 @@ struct MusicService {
         request.timeoutInterval = 20 * 60
         request.setValue(key, forHTTPHeaderField: "xi-api-key")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("ElevenLabs Music Generator Mac/1.5.1", forHTTPHeaderField: "User-Agent")
+        request.setValue("ElevenLabs Music Generator Mac/1.5.2", forHTTPHeaderField: "User-Agent")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let start = Date()
         let (download, response) = try await session.download(for: request)
@@ -96,6 +97,8 @@ struct MusicService {
             try WaveWriter.wrap(input: audioPart, output: wrapped, sampleRate: 44_100)
             try fm.removeItem(at: audioPart)
             try fm.moveItem(at: wrapped, to: audioPart)
+        } else if input.format == .wav48 && !WaveWriter.isSoundEffectWave48(audioPart) {
+            throw MusicError.response("ElevenLabs did not return a valid 48 kHz WAV file.")
         }
         guard (try? audioPart.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0) ?? 0 > 0 else {
             throw MusicError.response("ElevenLabs returned an empty audio file.")
@@ -144,7 +147,8 @@ struct MusicService {
             try input.sourceData.write(to: input.promptURL, options: .atomic)
         }
         return GeneratedTrack(url: finalDestination, detailsURL: detailsURL, lyricsURL: lyricsURL,
-            seconds: Date().timeIntervalSince(start), songID: http.value(forHTTPHeaderField: "song-id"))
+            seconds: Date().timeIntervalSince(start), songID: http.value(forHTTPHeaderField: "song-id"),
+            reportedCredits: input.isSoundEffect ? RunCreditUsage.parse(http.value(forHTTPHeaderField: "character-cost")) : nil)
     }
 
     private static func extractTitle(_ json: String) -> String? {
@@ -160,7 +164,7 @@ struct MusicService {
         request.httpMethod = method
         request.timeoutInterval = timeout
         request.setValue(key, forHTTPHeaderField: "xi-api-key")
-        request.setValue("ElevenLabs Music Generator Mac/1.5.1", forHTTPHeaderField: "User-Agent")
+        request.setValue("ElevenLabs Music Generator Mac/1.5.2", forHTTPHeaderField: "User-Agent")
         if let body {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -205,6 +209,7 @@ struct GeneratedTrack {
     var lyricsURL: URL?
     var seconds: TimeInterval
     var songID: String?
+    var reportedCredits: Decimal?
 }
 
 enum MultipartMusicResponse {
@@ -251,6 +256,14 @@ enum MultipartMusicResponse {
 }
 
 enum WaveWriter {
+    static func isSoundEffectWave48(_ url: URL) -> Bool {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
+        defer { try? handle.close() }
+        guard let header = try? handle.read(upToCount: 12), header.count == 12,
+              header.prefix(4) == Data("RIFF".utf8), header.suffix(4) == Data("WAVE".utf8),
+              let wave = try? AVAudioFile(forReading: url) else { return false }
+        return wave.length > 0 && wave.fileFormat.sampleRate == 48_000
+    }
     static func wrap(input: URL, output: URL, sampleRate: UInt32) throws {
         let size = try FileManager.default.attributesOfItem(atPath: input.path)[.size] as? UInt64 ?? 0
         guard size > 0, size <= UInt64(UInt32.max - 36), size.isMultiple(of: 4) else {

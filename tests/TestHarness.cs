@@ -282,7 +282,9 @@ namespace ElevenLabsMusicGenerator.Tests
                 Run("Quoted output folder settings", TestQuotedOutputFolder);
                 Run("Quoted preferences save without a success popup", TestQuotedPreferencesSave);
                 Run("Sound effects model and request", TestSoundEffectsRequest);
+                Run("Run credit reporting", TestRunCreditUsage);
                 Run("Sound effects generation and safe resume", TestSoundEffectsGeneration);
+                Run("Native 48 kHz sound effects", TestNativeSfx48);
                 Run("Sound effects mode preserves music settings", TestSoundEffectsModeSwitch);
                 Run("Prompt drafts migrate and round trip", TestPromptDraftMigration);
                 Run("Main model selector and persistence", TestMainModelSelector);
@@ -651,6 +653,8 @@ namespace ElevenLabsMusicGenerator.Tests
             var oldPrompt = request.SourceText().Replace("eleven_text_to_sound_v3", "eleven_text_to_sound_v2");
             reopened = MusicGenerationRequest.ReadSoundEffect(oldPrompt);
             Assert(reopened.ModelId == "eleven_text_to_sound_v3" && reopened.Prompt == request.Prompt && reopened.AutomaticDuration && reopened.Loop && reopened.PromptInfluence == request.PromptInfluence && reopened.OutputFormat == request.OutputFormat, "A v2 prompt must reopen as v3 without losing its settings.");
+            var wav48 = MusicGenerationRequest.ReadSoundEffect(oldPrompt.Replace("pcm_44100", "wav_48000").Replace("\"loop\":true", "\"loop\":false"));
+            Assert(wav48.OutputFormat == "wav_48000" && AppSettings.NormalizeOutputFormat(wav48.OutputFormat) == wav48.OutputFormat, "Native 48 kHz WAV must round-trip through prompts and settings.");
             var unsupported = false;
             try { MusicGenerationRequest.ReadSoundEffect(oldPrompt.Replace("eleven_text_to_sound_v2", "eleven_text_to_sound_v99")); }
             catch (InvalidDataException) { unsupported = true; }
@@ -669,15 +673,29 @@ namespace ElevenLabsMusicGenerator.Tests
             Assert(rejected, "Saved sound effects prompts over 450 characters must be rejected.");
         }
 
+        private static void TestRunCreditUsage()
+        {
+            var five = RunCreditUsage.Parse("5");
+            var seven = RunCreditUsage.Parse("7");
+            Assert(five == 5m && seven == 7m && RunCreditUsage.Parse("1.25") == 1.25m && RunCreditUsage.Parse("0") == 0m,
+                "Valid response costs should be kept exactly.");
+            foreach (var invalid in new[] { null, "", "-2", "1,2", "4.2x", "4e2", "1.", "2\r\n1" })
+                Assert(RunCreditUsage.Parse(invalid) == null, "Missing or invalid costs must not appear as charges.");
+            Assert(RunCreditUsage.CompletionLine(new[] { five, seven }) == "Credits used this run: 12.", "Confirmed requests must be summed.");
+            Assert(RunCreditUsage.CompletionLine(new[] { five, (decimal?)null }) == null &&
+                RunCreditUsage.CompletionLine(new decimal?[0]) == null, "An incomplete or empty run must not display a total.");
+        }
+
         private static void TestSoundEffectsGeneration()
         {
             var folder = Path.Combine(AppPaths.AppFolder, "SoundEffectsTest");
             var request = new MusicGenerationRequest { ModelId = MusicGenerationRequest.SoundEffectsModel, Prompt = "A wooden door closing", OutputFormat = "pcm_44100", OutputFolder = folder, BaseName = "Door", Variations = 2,
                 AutomaticDuration = true, SoundEffectSeconds = 0.5m, Loop = true, PromptInfluence = 0.7m, IncludeDetails = true };
-            using (var server = new MockHttpServer(new byte[44100 * 4]))
+            using (var server = new MockHttpServer(new byte[44100 * 4], reportedCreditCost: "5"))
             {
                 var client = new ElevenLabsMusicClient("test-key", server.ApiRoot);
-                client.GenerateOne(request, request.OutputPaths()[0], 1, CancellationToken.None, null);
+                var effect = client.GenerateOne(request, request.OutputPaths()[0], 1, CancellationToken.None, null);
+                Assert(effect.ReportedCredits == 5m, "Sound effect cost header was lost.");
                 server.Wait();
                 Assert(server.RequestText.Contains("POST /v1/sound-generation?output_format=pcm_44100"), "Wrong sound effects endpoint.");
                 Assert(!server.RequestText.Contains("composition_plan") && !server.RequestText.Contains("music_length_ms"), "Music fields leaked into effects request.");
@@ -1187,6 +1205,35 @@ namespace ElevenLabsMusicGenerator.Tests
             }
         }
 
+        private static void TestNativeSfx48()
+        {
+            var folder = Path.Combine(AppPaths.AppFolder, "native-sfx48");
+            Directory.CreateDirectory(folder);
+            var input = Path.Combine(folder, "fixture.pcm");
+            var wave = Path.Combine(folder, "fixture.wav");
+            File.WriteAllBytes(input, new byte[48000]);
+            WaveFileWriter.WrapPcmFile(input, wave, 48000);
+            var bytes = File.ReadAllBytes(wave);
+            var request = new MusicGenerationRequest { ModelId = MusicGenerationRequest.SoundEffectsModel, OutputFolder = folder,
+                BaseName = "Knock", Prompt = "A knock", OutputFormat = "pcm_44100", SoundEffectSeconds = .5m, Variations = 1 };
+            var existing = request.OutputPaths()[0];
+            File.WriteAllText(existing, "Unrelated 44.1 kHz file");
+            request.OutputFormat = MusicGenerationRequest.NativeSfxWave48;
+            using (var server = new MockHttpServer(bytes, "200 OK", "audio/wav"))
+            {
+                var path = request.OutputPaths()[0];
+                var result = new ElevenLabsMusicClient("test-key", server.ApiRoot).GenerateOne(request, path, 1, CancellationToken.None, null);
+                server.Wait();
+                Assert(server.RequestText.Contains("/v1/sound-generation?output_format=wav_48000"), "The service must receive its native WAV option.");
+                Assert(Path.GetFileName(path) == "Knock_48k.wav" && File.ReadAllBytes(result.OutputPath).SequenceEqual(bytes), "Native WAV must be saved byte for byte.");
+                Assert(File.ReadAllText(existing) == "Unrelated 44.1 kHz file" && GenerationBatchPlan.Create(request).ExistingCount == 1, "Native WAV must resume separately from older formats.");
+                request.BaseName = "Knock_48k";
+                Assert(request.OutputPaths()[0] == path, "Opening a prompt must not duplicate the format suffix.");
+            }
+            Assert(MusicGenerationRequest.FormatError(true, request.OutputFormat, true) != null &&
+                MusicGenerationRequest.FormatError(false, request.OutputFormat, false) != null, "48 kHz WAV is restricted to non-looping effects.");
+        }
+
         private static void TestSoundEffectsApiKeyRequest()
         {
             using (var server = new MockHttpServer(Encoding.ASCII.GetBytes("ID3test-audio"), "200 OK", "audio/mpeg"))
@@ -1230,6 +1277,30 @@ namespace ElevenLabsMusicGenerator.Tests
 
         private static void TestSubscriptionBalance()
         {
+            {
+                var text = SubscriptionBalance.Parse("{\"character_count\":37,\"character_limit\":100,\"max_credit_limit_extension\":0}").Format(DateTimeOffset.UtcNow);
+                Assert(text.Contains("(63%)") && !text.Contains("Overage billing:"), "Disabled overages must not add a status line.");
+            }
+            {
+                var text = SubscriptionBalance.Parse("{\"character_count\":37,\"character_limit\":100,\"max_credit_limit_extension\":25,\"can_extend_character_limit\":false,\"current_overage\":{\"amount\":\"0.00\",\"currency\":\"usd\"}}").Format(DateTimeOffset.UtcNow);
+                Assert(text.Contains("Next reset: unavailable." + Environment.NewLine + "Overage billing: on.") && !text.Contains("Current overage charge"), "Enabled overages must appear after the reset, without a zero charge.");
+            }
+            {
+                var text = SubscriptionBalance.Parse("{\"character_count\":0,\"character_limit\":0,\"can_extend_character_limit\":true}").Format(DateTimeOffset.UtcNow);
+                Assert(!text.Contains("%") && !text.Contains("Overage billing:"), "Credit balance percentage or overage details changed.");
+            }
+            {
+                var text = SubscriptionBalance.Parse("{\"character_count\":1,\"character_limit\":100000,\"max_credit_limit_extension\":\"unlimited\",\"current_overage\":{\"amount\":\"39.11\",\"currency\":\"usd\"}}").Format(DateTimeOffset.UtcNow);
+                Assert(text.Contains("(99%)") && text.Contains("Overage billing: on.") && text.Contains("Current overage charge: USD "), "Credit balance percentage or overage details changed.");
+            }
+            {
+                var text = SubscriptionBalance.Parse("{\"character_count\":101,\"character_limit\":100,\"max_credit_limit_extension\":\"invalid\",\"current_overage\":{\"amount\":\"39.11\"}}").Format(DateTimeOffset.UtcNow);
+                Assert(text.Contains("(0%)") && text.Contains("exceeded by") && !text.Contains("Overage billing:") && !text.Contains("Current overage charge"), "Credit balance percentage or overage details changed.");
+            }
+            {
+                var text = SubscriptionBalance.Parse("{\"character_count\":20,\"character_limit\":100,\"max_credit_limit_extension\":0,\"current_overage\":{\"amount\":\"1.25\",\"currency\":\"usd\"}}").Format(DateTimeOffset.UtcNow);
+                Assert(!text.Contains("Overage billing:") && text.Contains("Next reset: unavailable." + Environment.NewLine + "Current overage charge: USD "), "An existing charge must still be reported after overages are disabled.");
+            }
             var response = "{\"tier\":\"starter\",\"character_count\":2224,\"character_limit\":64422,\"next_character_count_reset_unix\":1790796665}";
             using (var server = new MockHttpServer(Encoding.UTF8.GetBytes(response)))
             {
@@ -1244,7 +1315,7 @@ namespace ElevenLabsMusicGenerator.Tests
                 "Overage must not be shown as a negative balance.");
             var overage = SubscriptionBalance.Parse("{\"character_count\":244469,\"character_limit\":114089,\"can_extend_character_limit\":true,\"max_credit_limit_extension\":\"unlimited\",\"current_overage\":{\"amount\":\"39.11\",\"currency\":\"usd\"}}").Format(DateTimeOffset.UtcNow);
             Assert(overage.Contains("130,380") && overage.Contains("USD 39.11"), "Over-limit usage and its charge should be reported.");
-            Assert(overage.Contains("Usage-based billing is enabled") && overage.Contains("total spendable balance is not available"),
+            Assert(overage.Contains("Overage billing: on.") && overage.Contains("total spendable balance is not available"),
                 "The balance must not imply that an exhausted included allowance prevents generation.");
             Assert(SubscriptionBalance.Parse("{\"character_count\":0,\"character_limit\":10}").Format(DateTimeOffset.UtcNow).Contains("unavailable"),
                 "A missing reset time should be explained.");
@@ -1997,15 +2068,17 @@ namespace ElevenLabsMusicGenerator.Tests
             private readonly byte[] responseBody;
             private readonly string responseStatus;
             private readonly string responseContentType;
+            private readonly string reportedCreditCost;
             private readonly Task serverTask;
             public string ApiRoot { get; private set; }
             public string RequestText { get; private set; }
 
-            public MockHttpServer(byte[] responseBody, string responseStatus = "200 OK", string responseContentType = "application/octet-stream")
+            public MockHttpServer(byte[] responseBody, string responseStatus = "200 OK", string responseContentType = "application/octet-stream", string reportedCreditCost = null)
             {
                 this.responseBody = responseBody;
                 this.responseStatus = responseStatus;
                 this.responseContentType = responseContentType;
+                this.reportedCreditCost = reportedCreditCost;
                 listener = new TcpListener(IPAddress.Loopback, 0);
                 listener.Start();
                 var port = ((IPEndPoint)listener.LocalEndpoint).Port;
@@ -2056,7 +2129,8 @@ namespace ElevenLabsMusicGenerator.Tests
                         offset += count;
                     }
                     RequestText = headers + Encoding.UTF8.GetString(body, 0, offset);
-                    var responseHeaders = Encoding.ASCII.GetBytes("HTTP/1.1 " + responseStatus + "\r\nContent-Type: " + responseContentType + "\r\nsong-id: mock-song\r\nContent-Length: " + responseBody.Length + "\r\nConnection: close\r\n\r\n");
+                    var costHeader = reportedCreditCost == null ? "" : "Character-Cost: " + reportedCreditCost + "\r\n";
+                    var responseHeaders = Encoding.ASCII.GetBytes("HTTP/1.1 " + responseStatus + "\r\nContent-Type: " + responseContentType + "\r\nsong-id: mock-song\r\nContent-Length: " + responseBody.Length + "\r\nConnection: close\r\n" + costHeader + "\r\n");
                     stream.Write(responseHeaders, 0, responseHeaders.Length);
                     stream.Write(responseBody, 0, responseBody.Length);
                     stream.Flush();

@@ -116,7 +116,7 @@ struct MainView: View {
                 .focused($focus, equals: .model)
                 .accessibilityHint("Choose a Music model or Sound Effects. Command-Shift-M.")
                 Picker("Output format", selection: $model.preferences.format) {
-                    ForEach(AudioFormat.allCases.filter { !model.isSoundEffect || $0 == .wav || $0 == .mp3_44100_128 || $0 == .mp3_44100_192 }) { item in Text(item.title).tag(item.rawValue) }
+                    ForEach(AudioFormat.allCases.filter { $0.supports(soundEffects: model.isSoundEffect) }) { item in Text(item.title).tag(item.rawValue) }
                 }
                 .focused($focus, equals: .outputFormat)
                 .accessibilityHint("Choose the audio format. Command-Shift-F.")
@@ -170,6 +170,9 @@ struct MainView: View {
             if value == MusicModel.soundEffects.rawValue && model.preferences.format.hasPrefix("mp3_48000") {
                 model.preferences.format = AudioFormat.mp3_44100_192.rawValue
                 model.addStatus("Sound Effects selected. Output changed to MP3 44.1 kHz, 192 kbps.")
+            } else if value != MusicModel.soundEffects.rawValue && model.preferences.format == AudioFormat.wav48.rawValue {
+                model.preferences.format = AudioFormat.wav.rawValue
+                model.addStatus("Music selected. Output changed to WAV 44.1 kHz.")
             }
         }
         .task { model.checkUpdatesOnLaunch(); model.checkBalance() }

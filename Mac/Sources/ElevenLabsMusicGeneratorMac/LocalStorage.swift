@@ -162,8 +162,9 @@ enum BatchPlanner {
             }
             for index in existing {
                 let url = paths[index - 1]
-                let data = try Data(contentsOf: url, options: .mappedIfSafe)
-                guard matchesAudio(data, request: request) else {
+                let matches = request.format == .wav48 ? WaveWriter.isSoundEffectWave48(url) :
+                    try matchesAudio(Data(contentsOf: url, options: .mappedIfSafe), request: request)
+                guard matches else {
                     throw MusicError.validation("Existing track \(url.lastPathComponent) does not match the selected format. Choose a new base filename.")
                 }
             }

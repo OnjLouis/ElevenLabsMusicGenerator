@@ -29,6 +29,7 @@ struct SoundEffectOptions: Codable {
 
 enum AudioFormat: String, CaseIterable, Identifiable {
     case wav = "pcm_44100"
+    case wav48 = "wav_48000"
     case mp3_44100_128
     case mp3_44100_192
     case mp3_48000_192
@@ -36,10 +37,14 @@ enum AudioFormat: String, CaseIterable, Identifiable {
     case mp3_48000_320
 
     var id: String { rawValue }
-    var fileExtension: String { self == .wav ? "wav" : "mp3" }
+    var fileExtension: String { self == .wav || self == .wav48 ? "wav" : "mp3" }
+    func supports(soundEffects: Bool) -> Bool {
+        soundEffects ? [.wav, .wav48, .mp3_44100_128, .mp3_44100_192].contains(self) : self != .wav48
+    }
     var title: String {
         switch self {
         case .wav: "WAV, 44.1 kHz PCM"
+        case .wav48: "WAV, 48 kHz (non-looping effects)"
         case .mp3_44100_128: "MP3, 44.1 kHz, 128 kbps"
         case .mp3_44100_192: "MP3, 44.1 kHz, 192 kbps"
         case .mp3_48000_192: "MP3, 48 kHz, 192 kbps"
@@ -186,7 +191,10 @@ struct GenerationRequest {
         return ["model_id": model.rawValue, "prompt": prompt, "music_length_ms": durationSeconds * 1000, "force_instrumental": instrumental]
     }
 
-    var stem: String { baseName.isEmpty ? Self.suggestedStem(prompt) : Self.safeStem(baseName) }
+    var stem: String {
+        let name = baseName.isEmpty ? Self.suggestedStem(prompt) : Self.safeStem(baseName)
+        return format == .wav48 && !name.lowercased().hasSuffix("_48k") ? name + "_48k" : name
+    }
     var promptURL: URL { outputFolder.appendingPathComponent(stem + (isSoundEffect ? ".sfx.json" : plan == nil ? ".txt" : ".plan.json")) }
     var sourceData: Data {
         if isSoundEffect {
@@ -209,11 +217,14 @@ struct GenerationRequest {
 
     func validate() throws {
         guard (1...10).contains(variations) else { throw MusicError.validation("Choose 1 to 10 variations.") }
+        guard format.supports(soundEffects: isSoundEffect) else {
+            throw MusicError.validation(isSoundEffect ? "Choose WAV or a 44.1 kHz MP3 option for Sound Effects." : "48 kHz WAV is available only for Sound Effects.")
+        }
         if isSoundEffect {
             guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, prompt.utf16.count <= Self.soundEffectsPromptLimit else { throw MusicError.validation("Enter a sound effects prompt of no more than 450 characters. The prompt has been kept for editing.") }
             guard effects.duration.isFinite, effects.promptInfluence.isFinite,
                   (0.5...30).contains(effects.duration), (0...1).contains(effects.promptInfluence) else { throw MusicError.validation("Sound effects need 0.5 to 30 seconds and prompt influence between 0 and 1.") }
-            guard format == .wav || format == .mp3_44100_128 || format == .mp3_44100_192 else { throw MusicError.validation("Choose a 44.1 kHz WAV or MP3 format for Sound Effects.") }
+            guard !effects.loop || format != .wav48 else { throw MusicError.validation("48 kHz WAV is only available for non-looping sound effects. Turn off Loop or choose another format.") }
             return
         }
         if let plan {
